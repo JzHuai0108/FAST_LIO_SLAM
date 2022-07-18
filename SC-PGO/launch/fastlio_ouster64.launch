@@ -27,7 +27,6 @@
     <!-- input from FASTLIO2 -->
     <remap from="/aft_mapped_to_init" to="/Odometry"/>
     <remap from="/velodyne_cloud_registered_local" to="/cloud_registered_body"/>
-    <remap from="/cloud_for_scancontext" to="/cloud_registered_lidar"/>   <!-- because ScanContext requires lidar-ego-centric coordinate for the better performance -->
 
     <!-- utils -->
     <param name="save_directory" type="string" value="$(env HOME)/Desktop/catkin_fastlio_slam/data/"/>  <!-- CHANGE THIS and end with / -->

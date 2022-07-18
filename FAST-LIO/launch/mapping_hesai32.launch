@@ -1,9 +1,9 @@
 <launch>
-  <!-- Launch file for velodyne16 VLP-16 LiDAR -->
+  <!-- Launch file for hesai32 LiDAR -->
 
     <arg name="rviz" default="true" />
 
-    <rosparam command="load" file="$(find fast_lio)/config/velodyne.yaml" />
+    <rosparam command="load" file="$(find fast_lio)/config/hesai32.yaml" />
 
     <param name="feature_extract_enable" type="bool" value="0"/>
     <param name="point_filter_num" type="int" value="4"/>

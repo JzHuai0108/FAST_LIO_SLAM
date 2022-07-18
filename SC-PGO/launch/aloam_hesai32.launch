@@ -11,8 +11,6 @@
     <param name="mapping_line_resolution" type="double" value="0.2"/>
     <param name="mapping_plane_resolution" type="double" value="0.4"/>
 
-    <param name="mapviz_filter_size" type="double" value="0.05"/>
-
     <!-- SC-A-LOAM -->
     <param name="keyframe_meter_gap" type="double" value="1.0"/> 
 
@@ -23,10 +21,11 @@
 
     <!--  -->
     <param name="lidar_type" type="string" value="HDL32"/>
+
     <!-- input from FASTLIO2 -->
     <remap from="/aft_mapped_to_init" to="/Odometry"/>
     <remap from="/velodyne_cloud_registered_local" to="/cloud_registered_body"/>
- 
+
     <param name="save_directory" type="string" value="$(env HOME)/Desktop/temp/sc_pgo_data/"/>  <!-- CHANGE THIS and end with / -->
 
     <!-- <node pkg="aloam_velodyne" type="ascanRegistration" name="ascanRegistration" output="screen" />

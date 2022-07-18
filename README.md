@@ -14,6 +14,35 @@ Integration of
     - SC-PGO takes odometry and lidar point cloud topics from the FAST-LIO2 node. 
     - Finally, an optimized map is made within the SC-PGO node. 
 
+## Install gtsam
+
+```
+sudo apt-get install libtbb-dev
+cd $HOME/Documents/slam_src
+git clone https://github.com/borglab/gtsam.git --recursive
+cd gtsam
+
+git checkout b1f441dea9c2c59354c363a60c6e0f01305985ee
+# 6c85850147751d45cf9c595f1a7e623d239305fc
+# 342f30d148fae84c92ff71705c9e50e0a3683bda(previously tested commit)
+mkdir build
+cd build
+
+# GTSAM can be installed locally, e.g., at $HOME/slam_devel, but 
+# /usr/local is recommended as it has no issue when debugging in QtCreator.
+
+cmake -DCMAKE_INSTALL_PREFIX=/usr/local -DCMAKE_BUILD_TYPE=Release \
+  -DGTSAM_TANGENT_PREINTEGRATION=OFF -DGTSAM_POSE3_EXPMAP=ON -DGTSAM_ROT3_EXPMAP=ON \
+  -DGTSAM_USE_SYSTEM_EIGEN=ON -DGTSAM_BUILD_WITH_MARCH_NATIVE=OFF ..
+# -DEIGEN3_INCLUDE_DIR=$HOME/slam_devel/include/eigen3 -DEIGEN_INCLUDE_DIR=$HOME/slam_devel/include/eigen3 # for Ubuntu 16
+# In Ubuntu 16, to circumvent the incompatible system-wide Eigen, passing the local Eigen by EIGEN_INCLUDE_DIR is needed.
+# -DGTSAM_BUILD_WITH_MARCH_NATIVE=OFF # for linux, https://github.com/gisbi-kim/FAST_LIO_SLAM/issues/8
+
+make -j $(nproc) check # (optional, runs unit tests)
+make -j $(nproc) install
+```
+
+
 ## How to use?
 - The below commands and the launch files are made for playing the [MulRan dataset](https://sites.google.com/view/mulran-pr/home), but applicable for livox lidars in the same way (you could easily make your own launch files).
 ```
@@ -35,6 +64,35 @@ Integration of
     # open the other terminal tab
     # run file_player_mulran (for the details, refer here https://github.com/irapkaist/file_player_mulran)
 ```
+
+### [NCLT velodyne HDL32 dataset provided by fastlio2](https://drive.google.com/drive/folders/1VBK5idI1oyW0GC_I_Hxh63aqam3nocNK)
+```
+# one terminal
+source devel/setup.bash
+roslaunch fast_lio mapping_velodyne.launch
+# another terminal
+source devel/setup.bash
+roslaunch aloam_velodyne aloam_velodyne_HDL_32.launch
+# third terminal
+rosbag play /media/jhuai/SeagateData/jhuai/data/fastlio2/nclt/20121201.bag /points_raw:=/velodyne_points /imu_raw:=/imu/data
+```
+
+### HiltiSLAM2022 dataset
+```
+# one terminal
+source devel/setup.bash
+roslaunch fast_lio mapping_hesai32.launch
+# another terminal
+source devel/setup.bash
+roslaunch aloam_velodyne aloam_hesai32.launch
+# third terminal
+rosbag play /media/jhuai/SeagateData/jhuai/data/hiltislam2022/exp21_outside_building.bag
+```
+
+### Custom dataset
+Create launch files following the above examples, noting that the aloam nodes should be disabled and 
+that aloam outputs should be substituted for by the fastlio outputs as in aloam_velodyne_HDL_32.launch.
+
 
 ## Utility
 - We support keyframe scan saver (as in .pcd) and provide a script reconstructs a point cloud map by merging the saved scans using the optimized poses. See [here](https://github.com/gisbi-kim/FAST_LIO_SLAM/blob/bf975560741c425f71811c864af5d35aa880c797/SC-PGO/utils/python/makeMergedMap.py#L7).
