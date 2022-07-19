@@ -1,5 +1,7 @@
 <launch>
-    
+    <arg name="terminate_at_end" default="true" />
+    <arg name="save_directory" default="$(env HOME)/Desktop/temp/sc_pgo_data/" />
+    <param name="terminate_at_end" type="bool" value="$(arg terminate_at_end)"/>
     <param name="scan_line" type="int" value="32" />
 
     <!-- if 1, do mapping 10 Hz, if 2, do mapping 5 Hz. Suggest to use 1, it will adjust frequence automaticlly -->
@@ -26,12 +28,12 @@
     <remap from="/aft_mapped_to_init" to="/Odometry"/>
     <remap from="/velodyne_cloud_registered_local" to="/cloud_registered_body"/>
 
-    <param name="save_directory" type="string" value="$(env HOME)/Desktop/temp/sc_pgo_data/"/>  <!-- CHANGE THIS and end with / -->
+    <param name="save_directory" type="string" value="$(arg save_directory)"/>  <!-- CHANGE THIS and end with / -->
 
     <!-- <node pkg="aloam_velodyne" type="ascanRegistration" name="ascanRegistration" output="screen" />
     <node pkg="aloam_velodyne" type="alaserOdometry" name="alaserOdometry" output="screen" />
     <node pkg="aloam_velodyne" type="alaserMapping" name="alaserMapping" output="screen" /> -->
-    <node pkg="aloam_velodyne" type="alaserPGO" name="alaserPGO" output="screen" /> <!-- SC-A-LOAM -->
+    <node pkg="aloam_velodyne" type="alaserPGO" name="alaserPGO" output="screen" required="true"/> <!-- SC-A-LOAM -->
 
     <arg name="rviz" default="true" />
     <group if="$(arg rviz)">

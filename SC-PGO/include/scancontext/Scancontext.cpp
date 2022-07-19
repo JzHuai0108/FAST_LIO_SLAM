@@ -257,6 +257,7 @@ void SCManager::makeAndSaveScancontextAndKeys( pcl::PointCloud<SCPointType> & _s
     polarcontext_invkeys_.push_back( ringkey );
     polarcontext_vkeys_.push_back( sectorkey );
     polarcontext_invkeys_mat_.push_back( polarcontext_invkey_vec );
+    hasNewScan = true;
 } // SCManager::makeAndSaveScancontextAndKeys
 
 void SCManager::setSCdistThres(double _new_thres)
@@ -339,6 +340,13 @@ std::pair<int, float> SCManager::detectLoopClosureID ( void )
 
     auto curr_key = polarcontext_invkeys_mat_.back(); // current observation (query)
     auto curr_desc = polarcontexts_.back(); // current observation (query)
+
+    if (!hasNewScan) {
+        std::pair<int, float> result {loop_id, 0.0};
+        return result;
+    } else {
+        hasNewScan = false;  // remember that we processed the latest scan.
+    }
 
     /* 
      * step 1: candidates from ringkey tree_

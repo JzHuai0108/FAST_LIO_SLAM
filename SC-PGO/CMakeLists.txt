@@ -54,6 +54,7 @@ target_link_libraries(alaserMapping ${catkin_LIBRARIES} ${PCL_LIBRARIES} ${CERES
 
 add_executable(alaserPGO 
   src/laserPosegraphOptimization.cpp
+  src/terminator.cpp
   include/scancontext/Scancontext.cpp
 )
 target_compile_options(alaserPGO 

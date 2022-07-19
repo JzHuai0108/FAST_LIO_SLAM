@@ -7,3 +7,7 @@ FAST-LIO/Log/*.pdf
 .vscode/settings.json
 PCD/*.pcd
 *.pyc
+
+*.user
+
+FAST-LIO/PCD/scans.pcd

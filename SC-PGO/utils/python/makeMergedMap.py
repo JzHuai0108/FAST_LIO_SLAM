@@ -1,4 +1,5 @@
-import os 
+import argparse
+import os
 import sys
 import time 
 import copy 
@@ -21,18 +22,38 @@ color_table = jet_table
 color_table_len = color_table.shape[0]
 
 
+parser = argparse.ArgumentParser(
+    description="Make a merged map out of many pcd files.")
+parser.add_argument("data_dir",
+                    help="should end with /, e.g., /home/user/Documents/catkin2021/catkin_fastlio2/data/.")
+parser.add_argument("--idx_range",
+                    type=int, nargs=2,
+                    help=("pcd file index range. If you want a whole map, use [0, len(scan_files)]."))
+parser.add_argument("--node_skip",
+                    type=int, default=1,
+                    help=("Choose one scan out of every node_skip. (default: %(default)s)"))
+parser.add_argument('--o3d_vis', action='store_true',
+                    help=("Show the aggregated map by open3d? (default: %(default)s)"))
+parser.add_argument("--points_in_scan", type=int, default=30000,
+                    help=("e.g., use 150000 for 128 ray lidars, 100000 for 64 ray lidars, "
+                    "30000 for 16 ray lidars, if error occured, use the larger value. (default: %(default)s)"))
+
+args = parser.parse_args()
+
 ##########################
 # User only consider this block
 ##########################
 
-data_dir = "/home/user/Documents/catkin2021/catkin_fastlio2/data/" # should end with / 
-scan_idx_range_to_stack = [0, 200] # if you want a whole map, use [0, len(scan_files)]
-node_skip = 1
+data_dir = args.data_dir # should end with /
+scan_idx_range_to_stack = args.idx_range # if you want a whole map, use [0, len(scan_files)]
+if scan_idx_range_to_stack is None:
+    scan_idx_range_to_stack = [0, 1e9]
+node_skip = args.node_skip
 
-num_points_in_a_scan = 150000 # for reservation (save faster) // e.g., use 150000 for 128 ray lidars, 100000 for 64 ray lidars, 30000 for 16 ray lidars, if error occured, use the larger value.
+num_points_in_a_scan = args.points_in_scan # for reservation (save faster)
 
 is_live_vis = False # recommend to use false 
-is_o3d_vis = True
+is_o3d_vis = args.o3d_vis
 intensity_color_max = 200
 
 is_near_removal = True
@@ -59,6 +80,8 @@ f.close()
 
 #
 assert (scan_idx_range_to_stack[1] > scan_idx_range_to_stack[0])
+if scan_idx_range_to_stack[1] > len(scan_files):
+    scan_idx_range_to_stack[1] = len(scan_files)
 print("Merging scans from", scan_idx_range_to_stack[0], "to", scan_idx_range_to_stack[1])
 
 
@@ -89,7 +112,7 @@ for node_idx in range(len(scan_files)):
         if(node_idx is not scan_idx_range_to_stack[0]): # to ensure the vis init 
             continue
 
-    print("read keyframe scan idx", node_idx)
+    # print("read keyframe scan idx", node_idx)
 
     scan_pose = poses[node_idx]
 
@@ -132,13 +155,12 @@ for node_idx in range(len(scan_files)):
     np_intensity_all[curr_count:curr_count + scan_xyz.shape[0], :] = scan_intensity
 
     curr_count = curr_count + scan_xyz.shape[0]
-    print(curr_count)
- 
+print('Total points {}.'.format(curr_count))
+
 #
 if(is_o3d_vis):
     print("draw the merged map.")
     o3d.visualization.draw_geometries([pcd_combined_for_vis])
-
 
 # save ply having intensity
 np_xyz_all = np_xyz_all[0:curr_count, :]

@@ -14,6 +14,9 @@ Integration of
     - SC-PGO takes odometry and lidar point cloud topics from the FAST-LIO2 node. 
     - Finally, an optimized map is made within the SC-PGO node. 
 
+## Install ceres solver
+
+
 ## Install gtsam
 
 ```

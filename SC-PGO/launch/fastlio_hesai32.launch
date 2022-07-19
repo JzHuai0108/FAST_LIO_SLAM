@@ -1,0 +1,11 @@
+<launch>
+   <arg name="bagname" default="/path/to/ros.bag" />
+   <arg name="save_directory" default="$(env HOME)/Desktop/temp/sc_pgo_data/" />
+   <include file="$(find fast_lio)/launch/mapping_hesai32.launch"/>
+   <include file="$(find aloam_velodyne)/launch/aloam_hesai32.launch">
+     <arg name="save_directory" value="$(arg save_directory)"/>
+   </include>
+
+   <node pkg="rosbag" type="play" name="rosbag" args="$(arg bagname)" output="log" />
+</launch>
+

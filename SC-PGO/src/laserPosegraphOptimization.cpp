@@ -56,6 +56,7 @@
 #include "aloam_velodyne/tic_toc.h"
 
 #include "scancontext/Scancontext.h"
+#include "scancontext/terminator.h"
 
 using namespace gtsam;
 
@@ -82,6 +83,9 @@ std::mutex mKF;
 
 double timeLaserOdometry = 0.0;
 double timeLaser = 0.0;
+
+Terminator terminator(100);
+volatile bool shutdown;
 
 pcl::PointCloud<PointType>::Ptr laserCloudFullRes(new pcl::PointCloud<PointType>());
 pcl::PointCloud<PointType>::Ptr laserCloudMapAfterPGO(new pcl::PointCloud<PointType>());
@@ -193,6 +197,7 @@ void laserOdometryHandler(const nav_msgs::Odometry::ConstPtr &_laserOdometry)
 	mBuf.lock();
 	odometryBuf.push(_laserOdometry);
 	mBuf.unlock();
+	terminator.newPacket();
 } // laserOdometryHandler
 
 void laserCloudFullResHandler(const sensor_msgs::PointCloud2ConstPtr &_laserCloudFullRes)
@@ -631,6 +636,11 @@ void process_pg()
         // wait (must required for running the while loop)
         std::chrono::milliseconds dura(2);
         std::this_thread::sleep_for(dura);
+        shutdown = terminator.quit();
+        if (shutdown) {
+          std::cout << "shutdown ros!\n";
+          ros::shutdown();
+        }
     }
 } // process_pg
 
@@ -667,7 +677,7 @@ void process_lcd(void)
 
 void process_icp(void)
 {
-    while(1)
+    while(ros::ok())
     {
 		while ( !scLoopICPBuf.empty() )
         {
@@ -771,7 +781,11 @@ int main(int argc, char **argv)
 {
 	ros::init(argc, argv, "laserPGO");
 	ros::NodeHandle nh;
-
+	bool terminateAtEnd = false;
+	nh.param<bool>("terminate_at_end", terminateAtEnd, false);
+	if (!terminateAtEnd) {
+		 terminator.setWaitPacketsForNextPacket(-1);
+	}
 	nh.param<std::string>("save_directory", save_directory, "/"); // pose assignment every k m move 
     pgKITTIformat = save_directory + "optimized_poses.txt";
     odomKITTIformat = save_directory + "odom_poses.txt";
