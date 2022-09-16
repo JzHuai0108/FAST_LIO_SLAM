@@ -55,7 +55,7 @@ make -j $(nproc) install
     git clone https://github.com/gisbi-kim/FAST_LIO_SLAM.git
     git clone https://github.com/Livox-SDK/livox_ros_driver
     cd .. 
-    catkin_make
+    catkin build
     source devel/setup.bash
     roslaunch fast_lio mapping_ouster64_mulran.launch # setting for MulRan dataset 
 

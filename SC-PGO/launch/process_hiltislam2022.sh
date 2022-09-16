@@ -15,10 +15,15 @@ exp09_cupola
 exp11_lower_gallery
 exp15_attic_to_upper_gallery
 exp21_outside_building
+exp10_cupola_2
+exp14_basement_2
+exp16_attic_to_upper_gallery_2
+exp18_corridor_lower_gallery_2
+exp23_the_sheldonian_slam
 )
 
 lidarslam() {
-cd /media/jhuai/docker/catkin_fastlio_slam/
+cd /media/jhuai/docker/lidarslam/catkin_fastlio_slam/
 source devel/setup.bash
 
 for bag in "${bagnames[@]}"; do
@@ -30,7 +35,7 @@ done
 }
 
 mergescans() {
-cd /media/jhuai/docker/catkin_fastlio_slam/src/FAST_LIO_SLAM/SC-PGO/utils/python
+cd /media/jhuai/docker/lidarslam/catkin_fastlio_slam/src/FAST_LIO_SLAM/SC-PGO/utils/python
 script=makeMergedMap.py
 for bag in "${bagnames[@]}"; do
   echo "Merging scans for bag: $bag"
