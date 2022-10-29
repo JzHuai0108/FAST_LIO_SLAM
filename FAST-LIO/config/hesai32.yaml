@@ -2,7 +2,7 @@ common:
     lid_topic:  "/hesai/pandar"
     imu_topic:  "/alphasense/imu"
     time_sync_en: false         # ONLY turn on when external time synchronization is really not possible
-    time_offset_lidar_to_imu: 0.0  # lidar clock for lidar messages + time_offset_lidar_to_imu == imu clock for imu messages.
+    time_offset_lidar_to_imu: 0.00176257  # lidar clock for lidar messages + time_offset_lidar_to_imu == imu clock for imu messages.
 
 preprocess:
     lidar_type: 4                # 1 for Livox serials LiDAR, 2 for Velodyne LiDAR, 3 for ouster LiDAR, 
@@ -17,10 +17,10 @@ mapping:
     b_gyr_cov: 1.21e-6
     fov_degree:    180
     det_range:     120.0
-    extrinsic_T: [-0.001, -0.00855, 0.055]
-    extrinsic_R: [ -0.0000000, -1.0000000,  0.0000000,
-                   -1.0000000, -0.0000000,  0.0000000,
-                    0.0000000,  0.0000000, -1.0000000]
+    extrinsic_T: [0.00242799, -0.00417636, 0.0473645]
+    extrinsic_R: [ 0.00297918168800893, -0.999995471835893,   -0.000425187228479353,
+                   -0.999987625063738,  -0.00297746370788854, -0.00398552747493986,
+                   0.00398424344827555,  0.000437055577284898,-0.999991967361022]
 
 publish:     
     scan_publish_en:  true       # 'false' will close all the point cloud output
