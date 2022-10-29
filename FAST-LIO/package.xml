@@ -17,7 +17,6 @@
   <author email="zhangji@cmu.edu">Ji Zhang</author>
   
   <buildtool_depend>catkin</buildtool_depend>
-  <buildtool_depend>catkin_simple</buildtool_depend>
   <build_depend>geometry_msgs</build_depend>
   <build_depend>nav_msgs</build_depend>
   <build_depend>roscpp</build_depend>

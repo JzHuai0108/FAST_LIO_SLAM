@@ -2,7 +2,8 @@ common:
     lid_topic:  "/hesai/pandar"
     imu_topic:  "/alphasense/imu"
     time_sync_en: false         # ONLY turn on when external time synchronization is really not possible
-    
+    time_offset_lidar_to_imu: 0.0  # lidar clock for lidar messages + time_offset_lidar_to_imu == imu clock for imu messages.
+
 preprocess:
     lidar_type: 4                # 1 for Livox serials LiDAR, 2 for Velodyne LiDAR, 3 for ouster LiDAR, 
     scan_line: 32
