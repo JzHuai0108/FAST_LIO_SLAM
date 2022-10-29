@@ -527,6 +527,7 @@ void publish_frame_world(const ros::Publisher & pubLaserCloudFull)
 
 void publish_frame_body(const ros::Publisher & pubLaserCloudFull_body)
 {
+    ROS_INFO_STREAM("Publishing undistorted scans at " << lidar_end_time);
     int size = feats_undistort->points.size();
     PointCloudXYZI::Ptr laserCloudIMUBody(new PointCloudXYZI(size, 1));
 
