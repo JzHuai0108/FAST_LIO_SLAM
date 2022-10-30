@@ -83,6 +83,7 @@ condition_variable sig_buffer;
 
 string root_dir = ROOT_DIR;
 string map_file_path, lid_topic, imu_topic;
+string state_log_dir;
 
 double res_mean_last = 0.05, total_residual = 0.0;
 double last_timestamp_lidar = 0, last_timestamp_imu = -1.0;
@@ -146,20 +147,20 @@ void SigHandle(int sig)
     sig_buffer.notify_all();
 }
 
-inline void dump_lio_state_to_log(FILE *fp)  
+inline void dump_lio_state_to_log(double lidar_end_time, const state_ikfom& state_point, FILE *fp)  
 {
-    V3D rot_ang(Log(state_point.rot.toRotationMatrix()));
-    fprintf(fp, "%lf ", Measures.lidar_beg_time - first_lidar_time);
-    fprintf(fp, "%lf %lf %lf ", rot_ang(0), rot_ang(1), rot_ang(2));                   // Angle
-    fprintf(fp, "%lf %lf %lf ", state_point.pos(0), state_point.pos(1), state_point.pos(2)); // Pos  
-    fprintf(fp, "%lf %lf %lf ", 0.0, 0.0, 0.0);                                        // omega  
-    fprintf(fp, "%lf %lf %lf ", state_point.vel(0), state_point.vel(1), state_point.vel(2)); // Vel  
-    fprintf(fp, "%lf %lf %lf ", 0.0, 0.0, 0.0);                                        // Acc  
-    fprintf(fp, "%lf %lf %lf ", state_point.bg(0), state_point.bg(1), state_point.bg(2));    // Bias_g  
-    fprintf(fp, "%lf %lf %lf ", state_point.ba(0), state_point.ba(1), state_point.ba(2));    // Bias_a  
-    fprintf(fp, "%lf %lf %lf ", state_point.grav[0], state_point.grav[1], state_point.grav[2]); // Bias_a  
-    fprintf(fp, "\r\n");  
-    fflush(fp);
+    // V3D rot_ang(Log(state_point.rot.toRotationMatrix()));
+    fprintf(fp, "%.9lf ", lidar_end_time);
+    // fprintf(fp, "%lf %lf %lf ", rot_ang(0), rot_ang(1), rot_ang(2));                   // Angle
+    fprintf(fp, "%.6lf %.6lf %.6lf ", state_point.pos(0), state_point.pos(1), state_point.pos(2)); // Pos  
+    fprintf(fp, "%.9lf %.9lf %.9lf %.9lf ", state_point.rot.coeffs()[0], state_point.rot.coeffs()[1], state_point.rot.coeffs()[2], state_point.rot.coeffs()[3]);                                        // omega  
+    fprintf(fp, "%.6lf %.6lf %.6lf ", state_point.vel(0), state_point.vel(1), state_point.vel(2)); // Vel  
+    // fprintf(fp, "%lf %lf %lf ", 0.0, 0.0, 0.0);                                        // Acc  
+    fprintf(fp, "%.6lf %.6lf %.6lf ", state_point.bg(0), state_point.bg(1), state_point.bg(2));    // Bias_g  
+    fprintf(fp, "%.6lf %.6lf %.6lf ", state_point.ba(0), state_point.ba(1), state_point.ba(2));    // Bias_a  
+    fprintf(fp, "%.6lf %.6lf %.6lf ", state_point.grav[0], state_point.grav[1], state_point.grav[2]); // gravity in world 
+    fprintf(fp, "\n");
+    // fflush(fp);
 }
 
 void pointBodyToWorld_ikfom(PointType const * const pi, PointType * const po, state_ikfom &s)
@@ -527,7 +528,6 @@ void publish_frame_world(const ros::Publisher & pubLaserCloudFull)
 
 void publish_frame_body(const ros::Publisher & pubLaserCloudFull_body)
 {
-    ROS_INFO_STREAM("Publishing undistorted scans at " << lidar_end_time);
     int size = feats_undistort->points.size();
     PointCloudXYZI::Ptr laserCloudIMUBody(new PointCloudXYZI(size, 1));
 
@@ -788,8 +788,9 @@ int main(int argc, char** argv)
     nh.param<int>("pcd_save/interval", pcd_save_interval, -1);
     nh.param<vector<double>>("mapping/extrinsic_T", extrinT, vector<double>());
     nh.param<vector<double>>("mapping/extrinsic_R", extrinR, vector<double>());
+    nh.param<string>("save_directory", state_log_dir, "");
     cout<<"p_pre->lidar_type "<<p_pre->lidar_type<<endl;
-    
+    cout << "state log dir: " << state_log_dir << endl;
     path.header.stamp    = ros::Time::now();
     path.header.frame_id ="camera_init";
 
@@ -824,8 +825,8 @@ int main(int argc, char** argv)
 
     /*** debug record ***/
     FILE *fp;
-    string pos_log_dir = root_dir + "/Log/pos_log.txt";
-    fp = fopen(pos_log_dir.c_str(),"w");
+    string pos_log_filename = state_log_dir + "/pos_log.txt";
+    fp = fopen(pos_log_filename.c_str(),"w");
 
     ofstream fout_pre, fout_out, fout_dbg;
     fout_pre.open(DEBUG_FILE_DIR("mat_pre.txt"),ios::out);
@@ -1005,8 +1006,8 @@ int main(int argc, char** argv)
                 ext_euler = SO3ToEuler(state_point.offset_R_L_I);
                 fout_out << setw(20) << Measures.lidar_beg_time - first_lidar_time << " " << euler_cur.transpose() << " " << state_point.pos.transpose()<< " " << ext_euler.transpose() << " "<<state_point.offset_T_L_I.transpose()<<" "<< state_point.vel.transpose() \
                 <<" "<<state_point.bg.transpose()<<" "<<state_point.ba.transpose()<<" "<<state_point.grav<<" "<<feats_undistort->points.size()<<endl;
-                dump_lio_state_to_log(fp);
             }
+            dump_lio_state_to_log(lidar_end_time, state_point, fp);
         }
 
         status = ros::ok();
@@ -1027,7 +1028,7 @@ int main(int argc, char** argv)
 
     fout_out.close();
     fout_pre.close();
-
+    fclose(fp);
     if (runtime_pos_log)
     {
         vector<double> t, s_vec, s_vec2, s_vec3, s_vec4, s_vec5, s_vec6, s_vec7;    

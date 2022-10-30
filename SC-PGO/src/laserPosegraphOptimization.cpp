@@ -513,7 +513,6 @@ void process_pg()
             pcl::PointCloud<PointType>::Ptr thisKeyFrame(new pcl::PointCloud<PointType>());
             pcl::fromROSMsg(*fullResBuf.front(), *thisKeyFrame);
             fullResBuf.pop();
-            ROS_INFO_STREAM("Pose graph optimization received scan at " << timeLaser);
             Pose6D pose_curr = getOdom(odometryBuf.front());
             odometryBuf.pop();
 
@@ -626,7 +625,6 @@ void process_pg()
                     cout << "posegraph odom node " << curr_node_idx << " added." << endl;
             }
             // if want to print the current graph, use gtSAMgraph.print("\nFactor Graph:\n");
-            ROS_INFO_STREAM("Saving scan at " << timeLaser);
             // save utility 
             std::string curr_node_idx_str = padZeros(curr_node_idx);
             pcl::io::savePCDFileBinary(pgScansDirectory + curr_node_idx_str + ".pcd", *thisKeyFrame); // scan 
