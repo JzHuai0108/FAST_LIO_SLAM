@@ -788,6 +788,7 @@ int main(int argc, char** argv)
     nh.param<int>("pcd_save/interval", pcd_save_interval, -1);
     nh.param<vector<double>>("mapping/extrinsic_T", extrinT, vector<double>());
     nh.param<vector<double>>("mapping/extrinsic_R", extrinR, vector<double>());
+    nh.param<double>("mapping/gravity_m_s2", p_imu->G_m_s2, 9.81);
     nh.param<string>("save_directory", state_log_dir, "");
     cout<<"p_pre->lidar_type "<<p_pre->lidar_type<<endl;
     cout << "state log dir: " << state_log_dir << endl;

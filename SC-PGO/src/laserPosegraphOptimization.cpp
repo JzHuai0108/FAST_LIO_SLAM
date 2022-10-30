@@ -84,7 +84,7 @@ std::mutex mKF;
 double timeLaserOdometry = 0.0;
 double timeLaser = 0.0;
 
-Terminator terminator(100);
+Terminator terminator(200, 10.0);
 volatile bool shutdown;
 
 pcl::PointCloud<PointType>::Ptr laserCloudFullRes(new pcl::PointCloud<PointType>());
