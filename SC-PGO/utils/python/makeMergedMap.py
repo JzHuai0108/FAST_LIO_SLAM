@@ -14,6 +14,7 @@ from numpy import linalg as LA
 import open3d as o3d
 
 from pypcdMyUtils import * 
+from tf.transformations import *
 
 jet_table = np.load('jet_table.npy')
 bone_table = np.load('bone_table.npy')
@@ -72,8 +73,15 @@ f = open(data_dir+"optimized_poses.txt", 'r')
 while True:
     line = f.readline()
     if not line: break
-    pose_SE3 = np.asarray([float(i) for i in line.split()])
-    pose_SE3 = np.vstack( (np.reshape(pose_SE3, (3, 4)), np.asarray([0,0,0,1])) )
+    # pose_SE3 = np.asarray([float(i) for i in line.split()])
+    # pose_SE3 = np.vstack( (np.reshape(pose_SE3, (3, 4)), np.asarray([0,0,0,1])) )
+    data = [float(i) for i in line.split()]
+    position = np.asarray(data[1:4])
+    qxyzw = np.asarray(data[4:8])
+    Rq = quaternion_matrix(qxyzw)
+    pose_SE3 = np.identity(4)
+    pose_SE3[:3, :3] = Rq[:3, :3]
+    pose_SE3[:3, 3] = position
     poses.append(pose_SE3)
 f.close()
 

@@ -81,10 +81,10 @@ std::queue<std::pair<int, int> > scLoopICPBuf;
 std::mutex mBuf;
 std::mutex mKF;
 
-double timeLaserOdometry = 0.0;
-double timeLaser = 0.0;
+ros::Time timeLaserOdometry(0, 0);
+ros::Time timeLaser(0, 0);
 
-Terminator terminator(200, 10.0);
+Terminator terminator(300, 10.0);
 volatile bool shutdown;
 
 pcl::PointCloud<PointType>::Ptr laserCloudFullRes(new pcl::PointCloud<PointType>());
@@ -93,12 +93,14 @@ pcl::PointCloud<PointType>::Ptr laserCloudMapAfterPGO(new pcl::PointCloud<PointT
 std::vector<pcl::PointCloud<PointType>::Ptr> keyframeLaserClouds; 
 std::vector<Pose6D> keyframePoses;
 std::vector<Pose6D> keyframePosesUpdated;
-std::vector<double> keyframeTimes;
+std::vector<ros::Time> keyframeTimes;
 int recentIdxUpdated = 0;
 
 gtsam::NonlinearFactorGraph gtSAMgraph;
 bool gtSAMgraphMade = false;
 gtsam::Values initialEstimate;
+std::vector<ros::Time> newStateTimes;
+std::vector<ros::Time> isamStateTimes;
 gtsam::ISAM2 *isam;
 gtsam::Values isamCurrentEstimate;
 
@@ -134,8 +136,10 @@ ros::Publisher pubLoopScanLocal, pubLoopSubmapLocal;
 ros::Publisher pubOdomRepubVerifier;
 
 std::string save_directory;
-std::string pgKITTIformat, pgScansDirectory;
-std::string odomKITTIformat;
+std::string pgTUMFormat, pgScansDirectory;
+std::string odomTUMFormat;
+std::string scanMatchFile;
+std::ofstream scanMatchStream;
 std::fstream pgTimeSaveStream;
 
 std::string padZeros(int val, int num_digits = 6) {
@@ -167,6 +171,24 @@ void saveOdometryVerticesKITTIformat(std::string _filename)
     }
 }
 
+void saveOdometryVerticesTUMFormat(std::string _filename)
+{
+    if (keyframePoses.size() != keyframeTimes.size()) {
+        ROS_ERROR_STREAM("Inconsistent keyframe #poses " << keyframePoses.size() 
+                << " and #times " << keyframeTimes.size() << ".");
+    }
+    size_t minsize = std::min(keyframePoses.size(), keyframeTimes.size());
+    std::fstream stream(_filename.c_str(), std::fstream::out);
+    for(size_t i = 0; i < minsize; ++i) {
+        const auto& _pose6d = keyframePoses[i];
+        gtsam::Pose3 pose = Pose6DtoGTSAMPose3(_pose6d);
+        Point3 t = pose.translation();
+        Eigen::Quaterniond q = pose.rotation().toQuaternion();
+        stream << keyframeTimes[i] << " " << t.x() << " " << t.y() << " " << t.z()
+            << " " << q.x() << " " << q.y() << " " << q.z() << " " << q.w() << "\n";
+    }
+}
+
 void saveOptimizedVerticesKITTIformat(gtsam::Values _estimates, std::string _filename)
 {
     using namespace gtsam;
@@ -189,6 +211,30 @@ void saveOptimizedVerticesKITTIformat(gtsam::Values _estimates, std::string _fil
         stream << col1.x() << " " << col2.x() << " " << col3.x() << " " << t.x() << " "
                << col1.y() << " " << col2.y() << " " << col3.y() << " " << t.y() << " "
                << col1.z() << " " << col2.z() << " " << col3.z() << " " << t.z() << std::endl;
+    }
+}
+
+void saveOptimizedVerticesTUMFormat(gtsam::Values _estimates, std::string _filename)
+{
+    using namespace gtsam;
+    if (_estimates.size() != isamStateTimes.size()) {
+        ROS_ERROR_STREAM("Inconsistent keyframe estimated #poses " << _estimates.size() 
+                << " and #times " << isamStateTimes.size() << ".");
+    }
+    std::fstream stream(_filename.c_str(), std::fstream::out);
+    size_t minsize = std::min(_estimates.size(), isamStateTimes.size());
+    size_t i = 0;
+    for(const auto& key_value: _estimates) {
+        auto p = dynamic_cast<const GenericValue<Pose3>*>(&key_value.value);
+        if (!p) continue;
+        if (i >= minsize) break;
+        const Pose3& pose = p->value();
+
+        Point3 t = pose.translation();
+        Eigen::Quaterniond q = pose.rotation().toQuaternion();
+        stream << isamStateTimes[i] << " " << t.x() << " " << t.y() << " " << t.z()
+            << " " << q.x() << " " << q.y() << " " << q.z() << " " << q.w() << "\n";
+        ++i;
     }
 }
 
@@ -244,6 +290,13 @@ void initNoises( void )
 
 } // initNoises
 
+/**
+ * get Pose6D from nav_msgs Odometry message. It is exactly the inverse of pcl::getTransformation.
+ * return Pose6D p1
+ * Eigen::Affine3f T = pcl::getTransformation(p1.x, p1.y, p1.z, p1.roll, p1.pitch, p1.yaw);
+ * Eigen::Quaterniond(T.linear()) == _odom->pose.pose.orientation
+ * T.translation() == _odom->pose.pose.position
+ */
 Pose6D getOdom(nav_msgs::Odometry::ConstPtr _odom)
 {
     auto tx = _odom->pose.pose.position.x;
@@ -309,7 +362,7 @@ void pubPath( void )
         nav_msgs::Odometry odomAftPGOthis;
         odomAftPGOthis.header.frame_id = "camera_init";
         odomAftPGOthis.child_frame_id = "/aft_pgo";
-        odomAftPGOthis.header.stamp = ros::Time().fromSec(keyframeTimes.at(node_idx));
+        odomAftPGOthis.header.stamp = keyframeTimes.at(node_idx);
         odomAftPGOthis.pose.pose.position.x = pose_est.x;
         odomAftPGOthis.pose.pose.position.y = pose_est.y;
         odomAftPGOthis.pose.pose.position.z = pose_est.z;
@@ -368,17 +421,19 @@ void updatePoses(void)
 void runISAM2opt(void)
 {
     // called when a variable added 
+    isamStateTimes.insert(isamStateTimes.end(), newStateTimes.begin(), newStateTimes.end());
     isam->update(gtSAMgraph, initialEstimate);
     isam->update();
     
     gtSAMgraph.resize(0);
     initialEstimate.clear();
+    newStateTimes.clear();
 
     isamCurrentEstimate = isam->calculateEstimate();
     updatePoses();
 }
 
-pcl::PointCloud<PointType>::Ptr transformPointCloud(pcl::PointCloud<PointType>::Ptr cloudIn, gtsam::Pose3 transformIn)
+pcl::PointCloud<PointType>::Ptr transformPointCloud(pcl::PointCloud<PointType>::Ptr cloudIn, Eigen::Affine3f transCur)
 {
     pcl::PointCloud<PointType>::Ptr cloudOut(new pcl::PointCloud<PointType>());
 
@@ -387,10 +442,6 @@ pcl::PointCloud<PointType>::Ptr transformPointCloud(pcl::PointCloud<PointType>::
     int cloudSize = cloudIn->size();
     cloudOut->resize(cloudSize);
 
-    Eigen::Affine3f transCur = pcl::getTransformation(
-                                    transformIn.translation().x(), transformIn.translation().y(), transformIn.translation().z(), 
-                                    transformIn.rotation().roll(), transformIn.rotation().pitch(), transformIn.rotation().yaw() );
-    
     int numberOfCores = 8; // TODO move to yaml 
     #pragma omp parallel for num_threads(numberOfCores)
     for (int i = 0; i < cloudSize; ++i)
@@ -402,7 +453,15 @@ pcl::PointCloud<PointType>::Ptr transformPointCloud(pcl::PointCloud<PointType>::
         cloudOut->points[i].intensity = pointFrom->intensity;
     }
     return cloudOut;
-} // transformPointCloud
+}
+
+pcl::PointCloud<PointType>::Ptr transformPointCloud(pcl::PointCloud<PointType>::Ptr cloudIn, gtsam::Pose3 transformIn)
+{
+    Eigen::Affine3f transCur = pcl::getTransformation(
+                                transformIn.translation().x(), transformIn.translation().y(), transformIn.translation().z(), 
+                                transformIn.rotation().roll(), transformIn.rotation().pitch(), transformIn.rotation().yaw() );
+    return transformPointCloud(cloudIn, transCur);
+}
 
 void loopFindNearKeyframesCloud( pcl::PointCloud<PointType>::Ptr& nearKeyframes, const int& key, const int& submap_size, const int& root_idx)
 {
@@ -414,13 +473,18 @@ void loopFindNearKeyframesCloud( pcl::PointCloud<PointType>::Ptr& nearKeyframes,
             continue;
 
         mKF.lock(); 
-        *nearKeyframes += * local2global(keyframeLaserClouds[keyNear], keyframePosesUpdated[root_idx]);
+        *nearKeyframes += * local2global(keyframeLaserClouds[keyNear], keyframePosesUpdated[keyNear]);
         mKF.unlock(); 
     }
 
     if (nearKeyframes->empty())
         return;
 
+    const Pose6D& W_T_B = keyframePosesUpdated[root_idx];
+    Eigen::Affine3f affine_W_T_B = pcl::getTransformation(W_T_B.x, W_T_B.y, W_T_B.z, W_T_B.roll, W_T_B.pitch, W_T_B.yaw);
+    gtsam::Pose3 gtsam_W_T_B(gtsam::Rot3(affine_W_T_B.rotation().cast<double>()), affine_W_T_B.translation().cast<double>());
+    gtsam::Pose3 gtsam_B_T_W = gtsam_W_T_B.inverse();
+    nearKeyframes = transformPointCloud(nearKeyframes, gtsam_B_T_W);
     // downsample near keyframes
     pcl::PointCloud<PointType>::Ptr cloud_temp(new pcl::PointCloud<PointType>());
     downSizeFilterICP.setInputCloud(nearKeyframes);
@@ -428,14 +492,19 @@ void loopFindNearKeyframesCloud( pcl::PointCloud<PointType>::Ptr& nearKeyframes,
     *nearKeyframes = *cloud_temp;
 } // loopFindNearKeyframesCloud
 
-
+/**
+ * return the relative pose B(loop_kf)_T_B(curr_kf)
+ */
 std::optional<gtsam::Pose3> doICPVirtualRelative( int _loop_kf_idx, int _curr_kf_idx )
 {
     // parse pointclouds
     int historyKeyframeSearchNum = 25; // enough. ex. [-25, 25] covers submap length of 50x1 = 50m if every kf gap is 1m
     pcl::PointCloud<PointType>::Ptr cureKeyframeCloud(new pcl::PointCloud<PointType>());
     pcl::PointCloud<PointType>::Ptr targetKeyframeCloud(new pcl::PointCloud<PointType>());
-    loopFindNearKeyframesCloud(cureKeyframeCloud, _curr_kf_idx, 0, _loop_kf_idx); // use same root of loop kf idx 
+    // get current keyframe cloud in the current keyframe's body frame
+    // loopFindNearKeyframesCloud(cureKeyframeCloud, _curr_kf_idx, 0, _loop_kf_idx); // use same root of loop kf idx 
+    *cureKeyframeCloud = *keyframeLaserClouds[_curr_kf_idx];
+    // get loop keyframe clouds in the loop keyframe's body frame
     loopFindNearKeyframesCloud(targetKeyframeCloud, _loop_kf_idx, historyKeyframeSearchNum, _loop_kf_idx); 
 
     // loop verification 
@@ -457,7 +526,7 @@ std::optional<gtsam::Pose3> doICPVirtualRelative( int _loop_kf_idx, int _curr_kf
     icp.setEuclideanFitnessEpsilon(1e-6);
     icp.setRANSACIterations(0);
 
-    // Align pointclouds
+    // Align pointclouds to compute the transformation B(loop_kf)_T_B(curr_kf)
     icp.setInputSource(cureKeyframeCloud);
     icp.setInputTarget(targetKeyframeCloud);
     pcl::PointCloud<PointType>::Ptr unused_result(new pcl::PointCloud<PointType>());
@@ -472,14 +541,19 @@ std::optional<gtsam::Pose3> doICPVirtualRelative( int _loop_kf_idx, int _curr_kf
     }
 
     // Get pose transformation
-    float x, y, z, roll, pitch, yaw;
+    // float x, y, z, roll, pitch, yaw;
     Eigen::Affine3f correctionLidarFrame;
     correctionLidarFrame = icp.getFinalTransformation();
-    pcl::getTranslationAndEulerAngles (correctionLidarFrame, x, y, z, roll, pitch, yaw);
-    gtsam::Pose3 poseFrom = Pose3(Rot3::RzRyRx(roll, pitch, yaw), Point3(x, y, z));
-    gtsam::Pose3 poseTo = Pose3(Rot3::RzRyRx(0.0, 0.0, 0.0), Point3(0.0, 0.0, 0.0));
+    Eigen::Matrix3f rot = correctionLidarFrame.rotation();
+    Eigen::Vector3f trans = correctionLidarFrame.translation();
 
-    return poseFrom.between(poseTo);
+    // pcl::getTranslationAndEulerAngles (correctionLidarFrame, x, y, z, roll, pitch, yaw);
+    // gtsam::Pose3 poseFrom = Pose3(Rot3::RzRyRx(roll, pitch, yaw), Point3(x, y, z));
+    gtsam::Pose3 poseFrom = gtsam::Pose3(gtsam::Rot3(rot.cast<double>()), trans.cast<double>());
+    // gtsam::Pose3 poseTo = Pose3(Rot3::RzRyRx(0.0, 0.0, 0.0), Point3(0.0, 0.0, 0.0));
+
+    // return poseFrom.between(poseTo);  // poseFrom^{-1} * poseTo
+    return poseFrom;
 } // doICPVirtualRelative
 
 void process_pg()
@@ -501,11 +575,11 @@ void process_pg()
             }
 
             // Time equal check
-            timeLaserOdometry = odometryBuf.front()->header.stamp.toSec();
-            timeLaser = fullResBuf.front()->header.stamp.toSec();
+            timeLaserOdometry = odometryBuf.front()->header.stamp;
+            timeLaser = fullResBuf.front()->header.stamp;
             
             if (timeLaser != timeLaserOdometry) {
-                double d = timeLaser - timeLaserOdometry;
+                double d = (timeLaser - timeLaserOdometry).toSec();
                 ROS_INFO_STREAM("Large time gap between deskewed laser scan and odometry pose " << d << " sec.");
             }
             
@@ -520,8 +594,8 @@ void process_pg()
             double eps = 0.1; // find a gps topioc arrived within eps second 
             while (!gpsBuf.empty()) {
                 auto thisGPS = gpsBuf.front();
-                auto thisGPSTime = thisGPS->header.stamp.toSec();
-                if( abs(thisGPSTime - timeLaserOdometry) < eps ) {
+                auto thisGPSTime = thisGPS->header.stamp;
+                if( abs((thisGPSTime - timeLaserOdometry).toSec()) < eps ) {
                     currGPS = thisGPS;
                     hasGPSforThisKF = true; 
                     break;
@@ -591,6 +665,7 @@ void process_pg()
                     // prior factor 
                     gtSAMgraph.add(gtsam::PriorFactor<gtsam::Pose3>(init_node_idx, poseOrigin, priorNoise));
                     initialEstimate.insert(init_node_idx, poseOrigin);
+                    newStateTimes.push_back(timeLaser);
                     // runISAM2opt();          
                 }   
                 mtxPosegraph.unlock();
@@ -616,7 +691,8 @@ void process_pg()
                         gtSAMgraph.add(gtsam::GPSFactor(curr_node_idx, gpsConstraint, robustGPSNoise));
                         cout << "GPS factor added at node " << curr_node_idx << endl;
                     }
-                    initialEstimate.insert(curr_node_idx, poseTo);                
+                    initialEstimate.insert(curr_node_idx, poseTo);
+                    newStateTimes.push_back(timeLaser);            
                     // runISAM2opt();
                 }
                 mtxPosegraph.unlock();
@@ -641,6 +717,8 @@ void process_pg()
         shutdown = terminator.quit();
         if (shutdown) {
           std::cout << "shutdown ros!\n";
+          pgTimeSaveStream.close();
+          scanMatchStream.close();
           ros::shutdown();
         }
     }
@@ -701,6 +779,7 @@ void process_icp(void)
                 gtSAMgraph.add(gtsam::BetweenFactor<gtsam::Pose3>(prev_node_idx, curr_node_idx, relative_pose, robustLoopNoise));
                 // runISAM2opt();
                 mtxPosegraph.unlock();
+                scanMatchStream << keyframeTimes[prev_node_idx] << " " << keyframeTimes[curr_node_idx] << "\n";
             } 
         }
 
@@ -734,8 +813,10 @@ void process_isam(void)
             cout << "running isam2 optimization ..." << endl;
             mtxPosegraph.unlock();
 
-            saveOptimizedVerticesKITTIformat(isamCurrentEstimate, pgKITTIformat); // pose
-            saveOdometryVerticesKITTIformat(odomKITTIformat); // pose
+            // saveOptimizedVerticesKITTIformat(isamCurrentEstimate, pgKITTIformat); // pose
+            // saveOdometryVerticesKITTIformat(odomKITTIformat); // pose
+            saveOptimizedVerticesTUMFormat(isamCurrentEstimate, pgTUMFormat);
+            saveOdometryVerticesTUMFormat(odomTUMFormat);
         }
     }
 }
@@ -789,10 +870,11 @@ int main(int argc, char **argv)
 		 terminator.setWaitPacketsForNextPacket(-1);
 	}
 	nh.param<std::string>("save_directory", save_directory, "/"); // pose assignment every k m move 
-    pgKITTIformat = save_directory + "optimized_poses.txt";
-    odomKITTIformat = save_directory + "odom_poses.txt";
+    pgTUMFormat = save_directory + "optimized_poses.txt";
+    odomTUMFormat = save_directory + "odom_poses.txt";
     pgTimeSaveStream = std::fstream(save_directory + "times.txt", std::fstream::out); 
     pgTimeSaveStream.precision(std::numeric_limits<double>::max_digits10);
+    scanMatchStream = std::ofstream(save_directory + "scan_matches.txt", std::fstream::out);
     pgScansDirectory = save_directory + "Scans/";
     auto unused = system((std::string("exec rm -r ") + pgScansDirectory).c_str());
     unused = system((std::string("mkdir -p ") + pgScansDirectory).c_str());
