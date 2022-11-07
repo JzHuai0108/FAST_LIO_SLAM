@@ -870,11 +870,11 @@ int main(int argc, char **argv)
 		 terminator.setWaitPacketsForNextPacket(-1);
 	}
 	nh.param<std::string>("save_directory", save_directory, "/"); // pose assignment every k m move 
-    pgTUMFormat = save_directory + "optimized_poses.txt";
-    odomTUMFormat = save_directory + "odom_poses.txt";
-    pgTimeSaveStream = std::fstream(save_directory + "times.txt", std::fstream::out); 
+    pgTUMFormat = save_directory + "keyscan_optimized_poses.txt";
+    odomTUMFormat = save_directory + "keyscan_odom_poses.txt";
+    pgTimeSaveStream = std::fstream(save_directory + "keyscan_times.txt", std::fstream::out); 
     pgTimeSaveStream.precision(std::numeric_limits<double>::max_digits10);
-    scanMatchStream = std::ofstream(save_directory + "scan_matches.txt", std::fstream::out);
+    scanMatchStream = std::ofstream(save_directory + "keyscan_matches.txt", std::fstream::out);
     pgScansDirectory = save_directory + "Scans/";
     auto unused = system((std::string("exec rm -r ") + pgScansDirectory).c_str());
     unused = system((std::string("mkdir -p ") + pgScansDirectory).c_str());

@@ -69,7 +69,7 @@ scan_files = os.listdir(scan_dir)
 scan_files.sort()
 
 poses = []
-f = open(data_dir+"optimized_poses.txt", 'r')
+f = open(data_dir+"keyscan_optimized_poses.txt", 'r')
 while True:
     line = f.readline()
     if not line: break

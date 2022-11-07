@@ -826,7 +826,7 @@ int main(int argc, char** argv)
 
     /*** debug record ***/
     FILE *fp;
-    string pos_log_filename = state_log_dir + "/odometry.txt";
+    string pos_log_filename = state_log_dir + "/scan_states.txt";
     fp = fopen(pos_log_filename.c_str(),"w");
 
     ofstream fout_pre, fout_out, fout_dbg;
