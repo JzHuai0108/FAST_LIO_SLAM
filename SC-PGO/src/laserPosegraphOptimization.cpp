@@ -184,8 +184,8 @@ void saveOdometryVerticesTUMFormat(std::string _filename)
         gtsam::Pose3 pose = Pose6DtoGTSAMPose3(_pose6d);
         Point3 t = pose.translation();
         Eigen::Quaterniond q = pose.rotation().toQuaternion();
-        stream << keyframeTimes[i] << " " << t.x() << " " << t.y() << " " << t.z()
-            << " " << q.x() << " " << q.y() << " " << q.z() << " " << q.w() << "\n";
+        stream << keyframeTimes[i] << " " << std::fixed << std::setprecision(8) << t.x() << " " << t.y() << " " << t.z()
+            << " " << std::setprecision(9) << q.x() << " " << q.y() << " " << q.z() << " " << q.w() << "\n";
     }
 }
 
@@ -232,8 +232,8 @@ void saveOptimizedVerticesTUMFormat(gtsam::Values _estimates, std::string _filen
 
         Point3 t = pose.translation();
         Eigen::Quaterniond q = pose.rotation().toQuaternion();
-        stream << isamStateTimes[i] << " " << t.x() << " " << t.y() << " " << t.z()
-            << " " << q.x() << " " << q.y() << " " << q.z() << " " << q.w() << "\n";
+        stream << isamStateTimes[i] << " " << std::fixed << std::setprecision(8) << t.x() << " " << t.y() << " " << t.z()
+            << " " << std::setprecision(9) << q.x() << " " << q.y() << " " << q.z() << " " << q.w() << "\n";
         ++i;
     }
 }
