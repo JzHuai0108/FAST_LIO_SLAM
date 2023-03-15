@@ -791,6 +791,10 @@ int main(int argc, char** argv)
     nh.param<double>("mapping/gravity_m_s2", p_imu->G_m_s2, 9.81);
     nh.param<string>("save_directory", state_log_dir, "");
     cout<<"p_pre->lidar_type "<<p_pre->lidar_type<<endl;
+    if (state_log_dir.empty()) {
+      cout << "You have to provide save_directory to make the saving functions work properly." << std::endl;
+      return 0;
+    }
     cout << "state log dir: " << state_log_dir << endl;
     path.header.stamp    = ros::Time::now();
     path.header.frame_id ="camera_init";
@@ -825,7 +829,7 @@ int main(int argc, char** argv)
     kf.init_dyn_share(get_f, df_dx, df_dw, h_share_model, NUM_MAX_ITERATIONS, epsi);
 
     /*** debug record ***/
-    FILE *fp;
+    FILE *fp = NULL;
     string pos_log_filename = state_log_dir + "/scan_states.txt";
     fp = fopen(pos_log_filename.c_str(),"w");
 
@@ -1029,7 +1033,8 @@ int main(int argc, char** argv)
 
     fout_out.close();
     fout_pre.close();
-    fclose(fp);
+    if (fp)
+      fclose(fp);
     if (runtime_pos_log)
     {
         vector<double> t, s_vec, s_vec2, s_vec3, s_vec4, s_vec5, s_vec6, s_vec7;    
