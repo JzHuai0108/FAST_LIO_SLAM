@@ -1,6 +1,7 @@
 #include <cmath>
 #include <math.h>
 #include <deque>
+#include <iomanip>
 #include <mutex>
 #include <thread>
 #include <fstream>
@@ -81,10 +82,12 @@ class ImuProcess
   int    init_iter_num = 1;
   bool   b_first_frame_ = true;
   bool   imu_need_init_ = true;
+  double state_time_ = 0;
+  Eigen::Quaterniond imu_orientation_;
 };
 
 ImuProcess::ImuProcess()
-    : b_first_frame_(true), imu_need_init_(true), start_timestamp_(-1)
+    : last_lidar_end_time_(0), b_first_frame_(true), imu_need_init_(true), start_timestamp_(-1)
 {
   init_iter_num = 1;
   Q = process_noise_cov();
@@ -109,6 +112,7 @@ void ImuProcess::Reset()
   mean_gyr      = V3D(0, 0, 0);
   angvel_last       = Zero3d;
   imu_need_init_    = true;
+  last_lidar_end_time_ = 0;
   start_timestamp_  = -1;
   init_iter_num     = 1;
   v_imu_.clear();
@@ -159,7 +163,7 @@ void ImuProcess::IMU_init(const MeasureGroup &meas, esekfom::esekf<state_ikfom, 
 {
   /** 1. initializing the gravity, gyro bias, acc and gyro covariance
    ** 2. normalize the acceleration measurenments to unit gravity **/
-  
+  // jhuai: the state is initialized at meas.lidar_end_time.
   V3D cur_acc, cur_gyr;
   
   if (b_first_frame_)
@@ -195,9 +199,14 @@ void ImuProcess::IMU_init(const MeasureGroup &meas, esekfom::esekf<state_ikfom, 
   // init_state.grav = S2(- mean_acc / mean_acc.norm() * G_m_s2);
   init_state.grav = S2(Eigen::Vector3d(0, 0, -1) * G_m_s2);
 
-  Eigen::Quaterniond q_WS = Eigen::Quaterniond(meas.imu.front()->orientation.w, 
-    meas.imu.front()->orientation.x, meas.imu.front()->orientation.y,
-    meas.imu.front()->orientation.z);
+  Eigen::Quaterniond q_WS = Eigen::Quaterniond(meas.imu.back()->orientation.w, 
+    meas.imu.back()->orientation.x, meas.imu.back()->orientation.y,
+    meas.imu.back()->orientation.z);
+  state_time_ = meas.lidar_end_time;
+  imu_orientation_ = q_WS;
+  cout << "IMU back time " << meas.imu.back()->header.stamp << " lidar end time " 
+       << std::setprecision(15) << meas.lidar_end_time << " diff "
+       << meas.imu.back()->header.stamp.toSec() - meas.lidar_end_time << endl;
   init_state.rot = q_WS;
   //state_inout.rot = Eye3d; // Exp(mean_acc.cross(V3D(0, 0, -1 / scale_gravity)));
   // init_state.bg  = mean_gyr;
@@ -237,6 +246,7 @@ void ImuProcess::UndistortPcl(const MeasureGroup &meas, esekfom::esekf<state_ikf
   /*** Initialize IMU pose ***/
   state_ikfom imu_state = kf_state.get_x();
   IMUpose.clear();
+  Eigen::Quaterniond q_at_start = imu_state.rot;
   IMUpose.push_back(set_pose6d(0.0, acc_s_last, angvel_last, imu_state.vel, imu_state.pos, imu_state.rot.toRotationMatrix()));
 
   /*** forward propagation at each imu point ***/
@@ -262,7 +272,7 @@ void ImuProcess::UndistortPcl(const MeasureGroup &meas, esekfom::esekf<state_ikf
 
     // fout_imu << setw(10) << head->header.stamp.toSec() - first_lidar_time << " " << angvel_avr.transpose() << " " << acc_avr.transpose() << endl;
 
-    acc_avr     = acc_avr * G_m_s2 / mean_acc.norm(); // - state_inout.ba;
+    // acc_avr     = acc_avr * G_m_s2 / mean_acc.norm(); // - state_inout.ba;
 
     if(head->header.stamp.toSec() < last_lidar_end_time_)
     {
@@ -284,6 +294,11 @@ void ImuProcess::UndistortPcl(const MeasureGroup &meas, esekfom::esekf<state_ikf
 
     /* save the poses at each IMU measurements */
     imu_state = kf_state.get_x();
+    // adjust kf_state and imu_state by using the IMU orientation
+    Eigen::Quaterniond q_imu(tail->orientation.w, tail->orientation.x, tail->orientation.y, tail->orientation.z);
+    imu_state.rot = q_at_start * imu_orientation_.inverse() * q_imu;
+    kf_state.change_x(imu_state);
+
     angvel_last = angvel_avr - imu_state.bg;
     acc_s_last  = imu_state.rot * (acc_avr - imu_state.ba);
     for(int i=0; i<3; i++)
@@ -300,8 +315,18 @@ void ImuProcess::UndistortPcl(const MeasureGroup &meas, esekfom::esekf<state_ikf
   kf_state.predict(dt, Q, in);
   
   imu_state = kf_state.get_x();
+  // adjust kf_state and imu_state by using the IMU orientation
+  auto &&tail = *(v_imu.end() - 1);
+  Eigen::Quaterniond q_imu(tail->orientation.w, tail->orientation.x, tail->orientation.y, tail->orientation.z);
+  imu_state.rot = q_at_start * imu_orientation_.inverse() * q_imu;
+  kf_state.change_x(imu_state);
+
   last_imu_ = meas.imu.back();
   last_lidar_end_time_ = pcl_end_time;
+
+  state_time_ = last_lidar_end_time_;
+  imu_orientation_ = Eigen::Quaterniond(last_imu_->orientation.w, last_imu_->orientation.x, 
+    last_imu_->orientation.y, last_imu_->orientation.z);
 
   /*** undistort each lidar point (backward propagation) ***/
   if (pcl_out.points.begin() == pcl_out.points.end()) return;

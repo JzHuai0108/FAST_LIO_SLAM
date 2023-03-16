@@ -10,23 +10,23 @@ preprocess:
     scan_line: 16
     scan_rate: 10                # only need to be set for velodyne, unit: Hz,
     timestamp_unit: 0            # the unit of time/t field in the PointCloud2 rostopic: 0-second, 1-milisecond, 2-microsecond, 3-nanosecond.
-    blind: 2
+    blind: 1
 
 mapping:
-    acc_cov: 0.01
-    gyr_cov: 0.01
-    b_acc_cov: 0.0001
-    b_gyr_cov: 0.0001
+    acc_cov: 0.001
+    gyr_cov: 0.001
+    b_acc_cov: 0.00001
+    b_gyr_cov: 0.00001
     fov_degree:    180
     det_range:     100.0
-    extrinsic_est_en:  false      # true: enable the online estimation of IMU-LiDAR extrinsic,
+    extrinsic_est_en:  true      # true: enable the online estimation of IMU-LiDAR extrinsic,
     extrinsic_T: [ 0.0177, -0.0077, -0.09826]
     extrinsic_R: [ 0, 0, 1,
                    0, 1, 0,
                   -1, 0, 0]
 
 publish:
-    path_en:  false
+    path_en:  true
     scan_publish_en:  true       # false: close all the point cloud output
     dense_publish_en: true       # false: low down the points number in a global-frame point clouds scan.
     scan_bodyframe_pub_en: true  # true: output the point cloud scans in IMU-body-frame

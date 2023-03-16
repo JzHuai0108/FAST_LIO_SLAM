@@ -159,6 +159,8 @@ inline void dump_lio_state_to_log(double lidar_end_time, const state_ikfom& stat
     fprintf(fp, "%.6lf %.6lf %.6lf ", state_point.bg(0), state_point.bg(1), state_point.bg(2));    // Bias_g  
     fprintf(fp, "%.6lf %.6lf %.6lf ", state_point.ba(0), state_point.ba(1), state_point.ba(2));    // Bias_a  
     fprintf(fp, "%.6lf %.6lf %.6lf ", state_point.grav[0], state_point.grav[1], state_point.grav[2]); // gravity in world 
+    fprintf(fp, "%.6lf %.6lf %.6lf ", state_point.offset_T_L_I(0), state_point.offset_T_L_I(1), state_point.offset_T_L_I(2));
+    fprintf(fp, "%.9lf %.9lf %.9lf %.9lf ", state_point.offset_R_L_I.coeffs()[0], state_point.offset_R_L_I.coeffs()[1], state_point.offset_R_L_I.coeffs()[2], state_point.offset_R_L_I.coeffs()[3]);
     fprintf(fp, "\n");
     // fflush(fp);
 }
