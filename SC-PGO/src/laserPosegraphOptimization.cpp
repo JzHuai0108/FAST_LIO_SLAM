@@ -353,6 +353,18 @@ Pose6D diffTransformation(const Pose6D& _p1, const Pose6D& _p2)
     return Pose6D{double(abs(dx)), double(abs(dy)), double(abs(dz)), double(abs(droll)), double(abs(dpitch)), double(abs(dyaw))};
 } // SE3Diff
 
+/**
+ * a, b are 3x3 rotation matrix, unitary and orthogonal.
+ * https://courses.cs.duke.edu/fall13/compsci527/notes/rodrigues.pdf
+*/
+float diffRotation(const Eigen::Matrix3f &a, const Eigen::Matrix3f &b)
+{
+    Eigen::Matrix3f c = a.transpose() * b;
+    float trace = c(0,0) + c(1,1) + c(2,2);
+    float angle = acos((trace - 1.0) / 2.0);
+    return angle;
+}
+
 pcl::PointCloud<PointType>::Ptr local2global(const pcl::PointCloud<PointType>::Ptr &cloudIn, const Pose6D& tf)
 {
     pcl::PointCloud<PointType>::Ptr cloudOut(new pcl::PointCloud<PointType>());
@@ -552,15 +564,19 @@ std::optional<gtsam::Pose3> doICPVirtualRelative( int _loop_kf_idx, int _curr_kf
     loopFindNearKeyframesCloud(targetKeyframeCloud, _loop_kf_idx, historyKeyframeSearchNum, _loop_kf_idx); 
 
     // loop verification
-    sensor_msgs::PointCloud2 cureKeyframeCloudMsg;
-    pcl::toROSMsg(*cureKeyframeCloud, cureKeyframeCloudMsg);
-    cureKeyframeCloudMsg.header.frame_id = "camera_init";
-    pubLoopScanLocal.publish(cureKeyframeCloudMsg);
+    // sensor_msgs::PointCloud2 cureKeyframeCloudMsg;
+    // pcl::PointCloud<PointType>::Ptr cureKeyframeCloudWorld(new pcl::PointCloud<PointType>());
+    // cureKeyframeCloudWorld = local2global(cureKeyframeCloud, keyframePosesUpdated[_curr_kf_idx]);
+    // pcl::toROSMsg(*cureKeyframeCloudWorld, cureKeyframeCloudMsg);
+    // cureKeyframeCloudMsg.header.frame_id = "camera_init";
+    // pubLoopScanLocal.publish(cureKeyframeCloudMsg);
 
-    sensor_msgs::PointCloud2 targetKeyframeCloudMsg;
-    pcl::toROSMsg(*targetKeyframeCloud, targetKeyframeCloudMsg);
-    targetKeyframeCloudMsg.header.frame_id = "camera_init";
-    pubLoopSubmapLocal.publish(targetKeyframeCloudMsg);
+    // sensor_msgs::PointCloud2 targetKeyframeCloudMsg;
+    // pcl::PointCloud<PointType>::Ptr targetKeyframeCloudWorld(new pcl::PointCloud<PointType>());
+    // targetKeyframeCloudWorld = local2global(targetKeyframeCloud, keyframePosesUpdated[_loop_kf_idx]);
+    // pcl::toROSMsg(*targetKeyframeCloudWorld, targetKeyframeCloudMsg);
+    // targetKeyframeCloudMsg.header.frame_id = "camera_init";
+    // pubLoopSubmapLocal.publish(targetKeyframeCloudMsg);
 
     // ICP Settings
     pcl::IterativeClosestPoint<PointType, PointType> icp;
@@ -573,21 +589,27 @@ std::optional<gtsam::Pose3> doICPVirtualRelative( int _loop_kf_idx, int _curr_kf
     icp.setInputSource(cureKeyframeCloud);
     icp.setInputTarget(targetKeyframeCloud);
     pcl::PointCloud<PointType>::Ptr unused_result(new pcl::PointCloud<PointType>());
-
     Eigen::Affine3f guess = toEigenAffine3f(keyframePosesUpdated[_loop_kf_idx]).inverse() * toEigenAffine3f(keyframePosesUpdated[_curr_kf_idx]);
     icp.align(*unused_result, guess.matrix());
 
-    sensor_msgs::PointCloud2 cureKeyframeCloudRegMsg;
-    pcl::toROSMsg(*unused_result, cureKeyframeCloudRegMsg);
-    cureKeyframeCloudRegMsg.header.frame_id = "camera_init";
-    pubLoopScanLocalRegisted.publish(cureKeyframeCloudRegMsg);
-    
+    float rotang = diffRotation(guess.rotation(), icp.getFinalTransformation().block<3,3>(0,0));
+
     // float loopFitnessScoreThreshold = 0.3; // user parameter but fixed low value is safe. 
     if (icp.hasConverged() == false || icp.getFitnessScore() > loopFitnessScoreThreshold) {
-        std::cout << "[SC loop] ICP fitness test failed (" << icp.getFitnessScore() << " > " << loopFitnessScoreThreshold << "). Reject this SC loop." << std::endl;
+        ROS_INFO_STREAM("[SC loop] ICP fitness test failed (" << icp.getFitnessScore() << " > " << loopFitnessScoreThreshold << "). Reject this SC loop.");
         return std::nullopt;
     } else {
-        std::cout << "[SC loop] ICP fitness test passed (" << icp.getFitnessScore() << " < " << loopFitnessScoreThreshold << "). Add this SC loop." << std::endl;
+        ROS_INFO_STREAM("[SC loop] ICP fitness test passed (" << icp.getFitnessScore() << " < " << loopFitnessScoreThreshold 
+            << ", rot angle change " << rotang * 180 / M_PI << "). Add this SC loop.");
+        // TODO(jhuai): need mutex to protect loopIndexContainer?
+        loopIndexContainer[_curr_kf_idx] = _loop_kf_idx;
+        
+        sensor_msgs::PointCloud2 cureKeyframeCloudRegMsg;
+        pcl::PointCloud<PointType>::Ptr cureKeyframeCloudWorldReg(new pcl::PointCloud<PointType>());
+        cureKeyframeCloudWorldReg = local2global(unused_result, keyframePosesUpdated[_loop_kf_idx]);
+        pcl::toROSMsg(*cureKeyframeCloudWorldReg, cureKeyframeCloudRegMsg);
+        cureKeyframeCloudRegMsg.header.frame_id = "camera_init";
+        pubLoopScanLocalRegisted.publish(cureKeyframeCloudRegMsg);
     }
 
     // Get pose transformation
@@ -789,7 +811,6 @@ void performSCLoopClosure(void)
 
         mBuf.lock();
         scLoopICPBuf.push(std::pair<int, int>(prev_node_idx, curr_node_idx));
-        loopIndexContainer[curr_node_idx] = prev_node_idx;
         // addding actual 6D constraints in the other thread, icp_calculation.
         mBuf.unlock();
     }
@@ -842,7 +863,6 @@ void performRSLoopClosure(void)
         cout << "Loop candidate between " << loopKeyPre << " and " << loopKeyCur << "" << endl;
         mBuf.lock();
         scLoopICPBuf.push(std::pair<int, int>(loopKeyPre, loopKeyCur));
-        loopIndexContainer[loopKeyCur] = loopKeyPre;
         // addding actual 6D constraints in the other thread, icp_calculation.
         mBuf.unlock();
     }
