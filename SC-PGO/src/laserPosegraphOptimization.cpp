@@ -168,6 +168,7 @@ double loopNoiseScore;
 double vizmapFrequency;
 double vizPathFrequency;
 double speedFactor;
+double filter_size;
 ros::Publisher pubLoopScanLocalRegisted;
 double loopFitnessScoreThreshold;
 
@@ -531,6 +532,10 @@ gtsam::Pose3 Pose6dTogtsamPose3(Pose6D pose)
                                 gtsam::Point3(double(pose.x),    double(pose.y),     double(pose.z)));
 }
 
+Eigen::Affine3f toEigenAffine3f(const Pose6D &pose) {
+    return pcl::getTransformation(pose.x, pose.y, pose.z, pose.roll, pose.pitch, pose.yaw);
+}
+
 /**
  * return the relative pose B(loop_kf)_T_B(curr_kf)
  */
@@ -541,12 +546,12 @@ std::optional<gtsam::Pose3> doICPVirtualRelative( int _loop_kf_idx, int _curr_kf
     pcl::PointCloud<PointType>::Ptr cureKeyframeCloud(new pcl::PointCloud<PointType>());
     pcl::PointCloud<PointType>::Ptr targetKeyframeCloud(new pcl::PointCloud<PointType>());
     // get current keyframe cloud in the current keyframe's body frame
-    // loopFindNearKeyframesCloud(cureKeyframeCloud, _curr_kf_idx, 0, _loop_kf_idx); // use same root of loop kf idx 
-    *cureKeyframeCloud = *keyframeLaserClouds[_curr_kf_idx];
+    loopFindNearKeyframesCloud(cureKeyframeCloud, _curr_kf_idx, historyKeyframeSearchNum, _curr_kf_idx); 
+    // *cureKeyframeCloud = *keyframeLaserClouds[_curr_kf_idx];
     // get loop keyframe clouds in the loop keyframe's body frame
     loopFindNearKeyframesCloud(targetKeyframeCloud, _loop_kf_idx, historyKeyframeSearchNum, _loop_kf_idx); 
 
-    // loop verification 
+    // loop verification
     sensor_msgs::PointCloud2 cureKeyframeCloudMsg;
     pcl::toROSMsg(*cureKeyframeCloud, cureKeyframeCloudMsg);
     cureKeyframeCloudMsg.header.frame_id = "camera_init";
@@ -559,17 +564,18 @@ std::optional<gtsam::Pose3> doICPVirtualRelative( int _loop_kf_idx, int _curr_kf
 
     // ICP Settings
     pcl::IterativeClosestPoint<PointType, PointType> icp;
-    icp.setMaxCorrespondenceDistance(150); // giseop , use a value can cover 2*historyKeyframeSearchNum range in meter 
-    icp.setMaximumIterations(100);
+    icp.setMaxCorrespondenceDistance(2 * historyKeyframeSearchNum * keyframeMeterGap); // giseop , use a value can cover 2*historyKeyframeSearchNum range in meter 
+    icp.setMaximumIterations(50);
     icp.setTransformationEpsilon(1e-6);
-    icp.setEuclideanFitnessEpsilon(1e-6);
-    icp.setRANSACIterations(0);
+    icp.setEuclideanFitnessEpsilon(1e-1);
 
     // Align pointclouds to compute the transformation B(loop_kf)_T_B(curr_kf)
     icp.setInputSource(cureKeyframeCloud);
     icp.setInputTarget(targetKeyframeCloud);
     pcl::PointCloud<PointType>::Ptr unused_result(new pcl::PointCloud<PointType>());
-    icp.align(*unused_result);
+
+    Eigen::Affine3f guess = toEigenAffine3f(keyframePosesUpdated[_loop_kf_idx]).inverse() * toEigenAffine3f(keyframePosesUpdated[_curr_kf_idx]);
+    icp.align(*unused_result, guess.matrix());
 
     sensor_msgs::PointCloud2 cureKeyframeCloudRegMsg;
     pcl::toROSMsg(*unused_result, cureKeyframeCloudRegMsg);
@@ -586,8 +592,7 @@ std::optional<gtsam::Pose3> doICPVirtualRelative( int _loop_kf_idx, int _curr_kf
 
     // Get pose transformation
     // float x, y, z, roll, pitch, yaw;
-    Eigen::Affine3f correctionLidarFrame;
-    correctionLidarFrame = icp.getFinalTransformation();
+    Eigen::Affine3f correctionLidarFrame(icp.getFinalTransformation());
     Eigen::Matrix3f rot = correctionLidarFrame.rotation();
     Eigen::Vector3f trans = correctionLidarFrame.translation();
 
@@ -604,9 +609,15 @@ void process_pg()
             // pop and check keyframe is or not  
             // 
 			mBuf.lock();       
-            while (!odometryBuf.empty() && odometryBuf.front()->header.stamp < fullResBuf.front()->header.stamp)
-                odometryBuf.pop();
-            if (odometryBuf.empty())
+            while (!odometryBuf.empty() && !fullResBuf.empty()) {
+                if (odometryBuf.front()->header.stamp + ros::Duration(1e-4) < fullResBuf.front()->header.stamp)
+                    odometryBuf.pop();
+                else if (odometryBuf.front()->header.stamp > fullResBuf.front()->header.stamp + ros::Duration(1e-4))
+                    fullResBuf.pop();
+                else
+                    break;
+            }
+            if (odometryBuf.empty() || fullResBuf.empty())
             {
                 mBuf.unlock();
                 break;
@@ -774,7 +785,7 @@ void performSCLoopClosure(void)
     if( SCclosestHistoryFrameID != -1 ) { 
         const int prev_node_idx = SCclosestHistoryFrameID;
         const int curr_node_idx = keyframePoses.size() - 1; // because cpp starts 0 and ends n-1
-        cout << "Loop detected! - between " << prev_node_idx << " and " << curr_node_idx << "" << endl;
+        ROS_INFO_STREAM("Loop candidate between " << prev_node_idx << " and " << curr_node_idx << ".");
 
         mBuf.lock();
         scLoopICPBuf.push(std::pair<int, int>(prev_node_idx, curr_node_idx));
@@ -828,7 +839,7 @@ void performRSLoopClosure(void)
     int loopKeyCur = keyframePoses.size() - 1;
     int loopKeyPre = -1;
     if ( detectLoopClosureDistance(&loopKeyCur, &loopKeyPre) ){
-        cout << "Loop detected! - between " << loopKeyPre << " and " << loopKeyCur << "" << endl;
+        cout << "Loop candidate between " << loopKeyPre << " and " << loopKeyCur << "" << endl;
         mBuf.lock();
         scLoopICPBuf.push(std::pair<int, int>(loopKeyPre, loopKeyCur));
         loopIndexContainer[loopKeyCur] = loopKeyPre;
@@ -929,7 +940,7 @@ void process_icp(void)
                 // runISAM2opt();
                 mtxPosegraph.unlock();
                 scanMatchStream << keyframeTimes[prev_node_idx] << " " << keyframeTimes[curr_node_idx] << "\n";
-            } 
+            }
         }
 
         // wait (must required for running the while loop)
@@ -1048,8 +1059,9 @@ int main(int argc, char **argv)
 	nh.param<int>("graphUpdateTimes", graphUpdateTimes, 2);  
 	nh.param<double>("loopFitnessScoreThreshold", loopFitnessScoreThreshold, 0.3);  
 
-	nh.param<double>("speedFactor", speedFactor, 1);  
+	nh.param<double>("speedFactor", speedFactor, 1);
     {
+        nh.param<double>("sc_filter_size", filter_size, 0.4);
         nh.param<double>("loopClosureFrequency", loopClosureFrequency, 2);  
         loopClosureFrequency *= speedFactor;
         nh.param<double>("graphUpdateFrequency", graphUpdateFrequency, 1.0);  
@@ -1070,7 +1082,6 @@ int main(int argc, char **argv)
     scManager.setSCdistThres(scDistThres);
     scManager.setMaximumRadius(scMaximumRadius);
 
-    float filter_size = 0.4; 
     downSizeFilterScancontext.setLeafSize(filter_size, filter_size, filter_size);
     downSizeFilterICP.setLeafSize(filter_size, filter_size, filter_size);
 
