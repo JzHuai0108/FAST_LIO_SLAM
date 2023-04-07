@@ -302,7 +302,7 @@ void initNoises( void )
     odomNoiseVector6 << 1e-6, 1e-6, 1e-6, 1e-4, 1e-4, 1e-4;
     odomNoise = noiseModel::Diagonal::Variances(odomNoiseVector6);
 
-    double loopNoiseScore = 0.5; // constant is ok...
+    // double loopNoiseScore = 0.5; // constant is ok...
     gtsam::Vector robustNoiseVector6(6); // gtsam::Pose3 factor has 6 elements (6D)
     robustNoiseVector6 << loopNoiseScore, loopNoiseScore, loopNoiseScore, loopNoiseScore, loopNoiseScore, loopNoiseScore;
     robustLoopNoise = gtsam::noiseModel::Robust::Create(
@@ -537,7 +537,7 @@ gtsam::Pose3 Pose6dTogtsamPose3(Pose6D pose)
 std::optional<gtsam::Pose3> doICPVirtualRelative( int _loop_kf_idx, int _curr_kf_idx )
 {
     // parse pointclouds
-    int historyKeyframeSearchNum = 25; // enough. ex. [-25, 25] covers submap length of 50x1 = 50m if every kf gap is 1m
+    // int historyKeyframeSearchNum = 25; // enough. ex. [-25, 25] covers submap length of 50x1 = 50m if every kf gap is 1m
     pcl::PointCloud<PointType>::Ptr cureKeyframeCloud(new pcl::PointCloud<PointType>());
     pcl::PointCloud<PointType>::Ptr targetKeyframeCloud(new pcl::PointCloud<PointType>());
     // get current keyframe cloud in the current keyframe's body frame
@@ -998,7 +998,7 @@ void pubMap(void)
 
 void process_viz_map(void)
 {
-    float vizmapFrequency = 0.1; // 0.1 means run onces every 10s
+    // float vizmapFrequency = 0.1; // 0.1 means run onces every 10s
     ros::Rate rate(vizmapFrequency);
     while (ros::ok()) {
         rate.sleep();

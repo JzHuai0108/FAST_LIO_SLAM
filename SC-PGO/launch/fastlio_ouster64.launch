@@ -1,5 +1,8 @@
 <launch>
-
+    <arg name="terminate_at_end" default="true" />
+    <arg name="radius_search" default="true" />
+    <arg name="save_directory" default="$(env HOME)/Desktop/temp/sc_pgo_data/" />
+    <param name="terminate_at_end" type="bool" value="$(arg terminate_at_end)"/>
     <param name="scan_line" type="int" value="64" />
 
     <!-- if 1, do mapping 10 Hz, if 2, do mapping 5 Hz. Suggest to use 1, it will adjust frequence automaticlly -->
@@ -21,6 +24,17 @@
     <!-- <param name="sc_max_radius" type="double" value="40.0"/> 20 or 40 for indoor -->
     <param name="sc_max_radius" type="double" value="80.0"/> <!-- for outdoor -->
 
+    <!-- radius search -->
+    <param name="radius_search" type="bool" value="$(arg radius_search)"/>
+    <param name="historyKeyframeSearchRadius" value="10.0"/>
+    <param name="historyKeyframeSearchTimeDiff" value="30.0"/>
+    <param name="historyKeyframeSearchNum" value="10"/>
+    <param name="loopClosureFrequency" value="2.0"/>
+    <param name="graphUpdateFrequency" value="2.0"/>
+    <param name="graphUpdateTimes" value="2"/>
+    <param name="loopNoiseScore" value="0.02"/>
+    <param name="vizmapFrequency" value="1"/>
+
     <!-- for MulRan -->
     <param name="lidar_type" type="string" value="OS1-64"/>
 
@@ -37,7 +51,7 @@
     <!-- visulaization -->
     <arg name="rvizscpgo" default="true" />
     <group if="$(arg rvizscpgo)">
-        <node launch-prefix="nice" pkg="rviz" type="rviz" name="rvizscpgo" args="-d $(find aloam_velodyne)/rviz_cfg/aloam_velodyne.rviz" />
+        <node launch-prefix="nice" pkg="rviz" type="rviz" name="pgo_rviz" args="-d $(find aloam_velodyne)/rviz_cfg/aloam_velodyne.rviz" />
     </group>
 
 </launch>
