@@ -822,7 +822,6 @@ void process_pg()
         std::this_thread::sleep_for(dura);
         shutdown = terminator.quit();
         if (shutdown) {
-          std::cout << "shutdown ros!\n";
           pgTimeSaveStream.close();
           scanMatchStream.close();
           break;
