@@ -7,6 +7,7 @@ Terminator::Terminator(int _maxWaitPacketsForNextPacket, double _fps)
       shutdown(false), numPackets(0) {}
 
 void Terminator::newPacket() {
+  std::lock_guard<std::mutex> lock(mutex);
   auto now = std::chrono::system_clock::now();
   std::chrono::duration<double> diff = now - lastPacketTime;
   fps = 0.4 * fps + 0.6 / std::max(0.01, diff.count());
@@ -15,6 +16,7 @@ void Terminator::newPacket() {
 }
 
 bool Terminator::quit() {
+  std::lock_guard<std::mutex> lock(mutex);
   if (shutdown)
     return true;
   if (maxWaitPacketsForNextPacket < 0) {

@@ -2,6 +2,7 @@
 #define TERMINATOR_H
 
 #include <chrono>
+#include <mutex>
 
 class Terminator {
 public:
@@ -20,6 +21,7 @@ public:
   }
 
 private:
+  std::mutex mutex;
   std::chrono::time_point<std::chrono::system_clock> lastPacketTime;
 
   int maxWaitPacketsForNextPacket;
