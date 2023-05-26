@@ -1,9 +1,9 @@
 <launch>
-  <!-- Launch file for velodyne16 VLP-16 LiDAR -->
+  <!-- Launch file for kuangye hesai32 LiDAR -->
 
     <arg name="rviz" default="true" />
     <arg name="save_directory" default="$(find fast_lio)/Log" />
-    <rosparam command="load" file="$(find fast_lio)/config/vlp16.yaml" />
+    <rosparam command="load" file="$(find fast_lio)/config/kuangye_hesai32.yaml" />
 
     <param name="feature_extract_enable" type="bool" value="0"/>
     <param name="pcd_save_enable" type="int" value = "1" />

@@ -507,8 +507,17 @@ void publish_frame_world(const ros::Publisher & pubLaserCloudFull)
 
         for (int i = 0; i < size; i++)
         {
-            RGBpointBodyToWorld(&feats_undistort->points[i], \
-                                &laserCloudWorld->points[i]);
+            /*RGBpointBodyToWorld(&feats_undistort->points[i], \
+                                &laserCloudWorld->points[i]);*/
+            Matrix<double, 3, 1> temp;
+            temp(0) = feats_undistort->points[i].x;
+            temp(1) = feats_undistort->points[i].y;
+            temp(2) = feats_undistort->points[i].z;
+            temp = state_point.offset_R_L_I*temp + state_point.offset_T_L_I;
+            laserCloudWorld->points[i].x = temp(0);
+            laserCloudWorld->points[i].y = temp(1);
+            laserCloudWorld->points[i].z = temp(2);
+            laserCloudWorld->points[i].intensity = feats_undistort->points[i].intensity;
         }
         *pcl_wait_save += *laserCloudWorld;
 
@@ -519,7 +528,7 @@ void publish_frame_world(const ros::Publisher & pubLaserCloudFull)
             pcd_index ++;
             string all_points_dir(string(string(ROOT_DIR) + "PCD/scans_") + to_string(pcd_index) + string(".pcd"));
             pcl::PCDWriter pcd_writer;
-            cout << "current scan saved to /PCD/" << all_points_dir << endl;
+            cout << "current scan saved to " << all_points_dir << endl;
             pcd_writer.writeBinary(all_points_dir, *pcl_wait_save);
             pcl_wait_save->clear();
             scan_wait_num = 0;
@@ -1028,7 +1037,7 @@ int main(int argc, char** argv)
         string file_name = string("scans.pcd");
         string all_points_dir(string(string(ROOT_DIR) + "PCD/") + file_name);
         pcl::PCDWriter pcd_writer;
-        cout << "current scan saved to /PCD/" << file_name<<endl;
+        cout << "current scan saved to " << file_name<<endl;
         pcd_writer.writeBinary(all_points_dir, *pcl_wait_save);
     }
 
