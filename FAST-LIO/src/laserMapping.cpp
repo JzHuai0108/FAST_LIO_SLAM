@@ -509,6 +509,7 @@ void publish_frame_world(const ros::Publisher & pubLaserCloudFull)
         {
             /*RGBpointBodyToWorld(&feats_undistort->points[i], \
                                 &laserCloudWorld->points[i]);*/
+            // save the pointcloud in the local IMU frame.
             Matrix<double, 3, 1> temp;
             temp(0) = feats_undistort->points[i].x;
             temp(1) = feats_undistort->points[i].y;
@@ -1037,7 +1038,7 @@ int main(int argc, char** argv)
         string file_name = string("scans.pcd");
         string all_points_dir(string(string(ROOT_DIR) + "PCD/") + file_name);
         pcl::PCDWriter pcd_writer;
-        cout << "current scan saved to " << file_name<<endl;
+        cout << "current scan saved to /PCD/" << file_name<<endl;
         pcd_writer.writeBinary(all_points_dir, *pcl_wait_save);
     }
 
