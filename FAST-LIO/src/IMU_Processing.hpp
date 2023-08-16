@@ -61,6 +61,7 @@ class ImuProcess
   V3D cov_bias_acc;
   double first_lidar_time;
   double G_m_s2;
+  bool stationarystart_ = true;
 
  private:
   void IMU_init(const MeasureGroup &meas, esekfom::esekf<state_ikfom, 12, input_ikfom> &kf_state, int &N);
@@ -196,21 +197,28 @@ void ImuProcess::IMU_init(const MeasureGroup &meas, esekfom::esekf<state_ikfom, 
     N ++;
   }
   state_ikfom init_state = kf_state.get_x();
-  // init_state.grav = S2(- mean_acc / mean_acc.norm() * G_m_s2);
-  init_state.grav = S2(Eigen::Vector3d(0, 0, -1) * G_m_s2);
+  if (stationarystart_) {
+    init_state.grav = S2(- mean_acc / mean_acc.norm() * G_m_s2);
+    // state_inout.rot = Eye3d; // Exp(mean_acc.cross(V3D(0, 0, -1 / scale_gravity)));
+    init_state.bg  = mean_gyr;
+  } else {
+    init_state.grav = S2(Eigen::Vector3d(0, 0, -1) * G_m_s2);
+    Eigen::Quaterniond q_WS = Eigen::Quaterniond(meas.imu.back()->orientation.w, 
+      meas.imu.back()->orientation.x, meas.imu.back()->orientation.y,
+      meas.imu.back()->orientation.z);
+    // state_time_ = meas.lidar_end_time;
+    // imu_orientation_ = q_WS;
+    cout << "IMU back time " << meas.imu.back()->header.stamp << " lidar end time " 
+        << std::setprecision(15) << meas.lidar_end_time << " diff "
+        << meas.imu.back()->header.stamp.toSec() - meas.lidar_end_time << endl;
+    init_state.rot = q_WS;
+    
+    init_state.bg  = V3D(0, 0, 0);
+  }
+  cout << "init grav " << init_state.grav.get_vect().transpose() << endl
+       << " rot " << init_state.rot.coeffs().transpose() << endl
+       << " bg " << init_state.bg.transpose() << endl;
 
-  Eigen::Quaterniond q_WS = Eigen::Quaterniond(meas.imu.back()->orientation.w, 
-    meas.imu.back()->orientation.x, meas.imu.back()->orientation.y,
-    meas.imu.back()->orientation.z);
-  // state_time_ = meas.lidar_end_time;
-  // imu_orientation_ = q_WS;
-  cout << "IMU back time " << meas.imu.back()->header.stamp << " lidar end time " 
-       << std::setprecision(15) << meas.lidar_end_time << " diff "
-       << meas.imu.back()->header.stamp.toSec() - meas.lidar_end_time << endl;
-  init_state.rot = q_WS;
-  //state_inout.rot = Eye3d; // Exp(mean_acc.cross(V3D(0, 0, -1 / scale_gravity)));
-  // init_state.bg  = mean_gyr;
-  init_state.bg  = V3D(0, 0, 0);
   init_state.offset_T_L_I = Lidar_T_wrt_IMU;
   init_state.offset_R_L_I = Lidar_R_wrt_IMU;
   kf_state.change_x(init_state);

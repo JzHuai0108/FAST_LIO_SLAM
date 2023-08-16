@@ -843,6 +843,10 @@ int main(int argc, char** argv)
     FILE *fp = NULL;
     string pos_log_filename = state_log_dir + "/scan_states.txt";
     fp = fopen(pos_log_filename.c_str(),"w");
+    if (fp == NULL) {
+        std::cout << "Failed to create state file " << pos_log_filename << "." << std::endl;
+        exit(1);
+    }
 
     ofstream fout_pre, fout_out, fout_dbg;
     fout_pre.open(DEBUG_FILE_DIR("mat_pre.txt"),ios::out);

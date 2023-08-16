@@ -52,10 +52,11 @@ make -j $(nproc) install
     # terminal 1: run FAST-LIO2 
     mkdir -p ~/catkin_fastlio_slam/src
     cd ~/catkin_fastlio_slam/src
-    git clone https://github.com/gisbi-kim/FAST_LIO_SLAM.git
+    git clone https://github.com/JzHuai0108/FAST_LIO_SLAM.git
     git clone https://github.com/Livox-SDK/livox_ros_driver
     cd .. 
-    catkin build
+    catkin build -DPYTHON_EXECUTABLE=/usr/bin/python3 -DPYTHON_INCLUDE_DIR=/usr/include/python3.8 -DGTSAM_DIR=/home/pi/Documents/slam_devel/lib/cmake/GTSAM
+
     source devel/setup.bash
     roslaunch fast_lio mapping_ouster64_mulran.launch # setting for MulRan dataset 
 
@@ -84,12 +85,13 @@ rosbag play /media/jhuai/SeagateData/jhuai/data/fastlio2/nclt/20121201.bag /poin
 ```
 # one terminal
 source devel/setup.bash
-roslaunch fast_lio mapping_hesai32.launch
+roslaunch fast_lio mapping_hesai32.launch save_directory:=/home/pi/Desktop/temp/
 # another terminal
 source devel/setup.bash
-roslaunch aloam_velodyne aloam_hesai32.launch
+export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:~/Documents/slam_devel/lib
+roslaunch aloam_velodyne aloam_hesai32.launch save_directory:=/home/pi/Desktop/temp/
 # third terminal
-rosbag play /media/jhuai/SeagateData/jhuai/data/hiltislam2022/exp21_outside_building.bag
+rosbag play /media/pi/BackupPlus/jhuai/data/hiltislam2022/exp21_outside_building.bag
 ```
 
 ### Custom dataset

@@ -1116,7 +1116,8 @@ int main(int argc, char **argv)
     pgTimeSaveStream.precision(std::numeric_limits<double>::max_digits10);
     scanMatchStream = std::ofstream(save_directory + "keyscan_matches.txt", std::fstream::out);
     pgScansDirectory = save_directory + "Scans/";
-    auto unused = system((std::string("exec rm -r ") + pgScansDirectory).c_str());
+    auto unused = system((std::string("mkdir -p ") + pgScansDirectory).c_str());
+    unused = system((std::string("exec rm -r ") + pgScansDirectory).c_str());
     unused = system((std::string("mkdir -p ") + pgScansDirectory).c_str());
 
 	nh.param<double>("keyframe_meter_gap", keyframeMeterGap, 2.0); // pose assignment every k m move 
