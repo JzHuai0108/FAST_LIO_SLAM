@@ -55,7 +55,7 @@ make -j $(nproc) install
     git clone https://github.com/JzHuai0108/FAST_LIO_SLAM.git
     git clone https://github.com/Livox-SDK/livox_ros_driver
     cd .. 
-    catkin build -DPYTHON_EXECUTABLE=/usr/bin/python3 -DPYTHON_INCLUDE_DIR=/usr/include/python3.8 -DGTSAM_DIR=/home/pi/Documents/slam_devel/lib/cmake/GTSAM
+    catkin build -DPYTHON_EXECUTABLE=/usr/bin/python3 -DPYTHON_INCLUDE_DIR=/usr/include/python3.8 -DGTSAM_DIR=/home/pi/Documents/slam_devel/lib/cmake/GTSAM -DCMAKE_BUILD_TYPE=Release
 
     source devel/setup.bash
     roslaunch fast_lio mapping_ouster64_mulran.launch # setting for MulRan dataset 

@@ -160,11 +160,15 @@ ros::Publisher pubOdomRepubVerifier;
 
 std::string save_directory;
 std::string pgTUMFormat, pgScansDirectory;
+std::string saveSCDDirectory;
 std::string odomTUMFormat;
 std::string pgKITTIformat;
 std::string odomKITTIformat;
 
 std::ofstream scanMatchStream;
+std::fstream pgSaveStream; // pg: pose-graph
+std::vector<std::string> edges_str;
+std::vector<std::string> vertices_str;
 std::fstream pgTimeSaveStream;
 
 // for front_end
@@ -190,6 +194,51 @@ std::string padZeros(int val, int num_digits = 6) {
   std::ostringstream out;
   out << std::internal << std::setfill('0') << std::setw(num_digits) << val;
   return out.str();
+}
+
+void saveSCD(std::string fileName, Eigen::MatrixXd matrix, std::string delimiter = " ")
+{
+    // delimiter: ", " or " " etc.
+
+    int precision = 3; // or Eigen::FullPrecision, but SCD does not require such accruate precisions so 3 is enough.
+    const static Eigen::IOFormat the_format(precision, Eigen::DontAlignCols, delimiter, "\n");
+ 
+    std::ofstream file(fileName);
+    if (file.is_open())
+    {
+        file << matrix.format(the_format);
+        file.close();
+    }
+}
+
+void writeVertex(const int _node_idx, const gtsam::Pose3& _initPose)
+{
+    gtsam::Point3 t = _initPose.translation();
+    gtsam::Rot3 R = _initPose.rotation();
+
+    std::string curVertexInfo {
+        "VERTEX_SE3:QUAT " + std::to_string(_node_idx) + " "
+        + std::to_string(t.x()) + " " + std::to_string(t.y()) + " " + std::to_string(t.z())  + " " 
+        + std::to_string(R.toQuaternion().x()) + " " + std::to_string(R.toQuaternion().y()) + " " 
+        + std::to_string(R.toQuaternion().z()) + " " + std::to_string(R.toQuaternion().w()) };
+
+    // pgVertexSaveStream << curVertexInfo << std::endl;
+    vertices_str.emplace_back(curVertexInfo);
+}
+
+void writeEdge(const std::pair<int, int> _node_idx_pair, const gtsam::Pose3& _relPose)
+{
+    gtsam::Point3 t = _relPose.translation();
+    gtsam::Rot3 R = _relPose.rotation();
+
+    std::string curEdgeInfo {
+        "EDGE_SE3:QUAT " + std::to_string(_node_idx_pair.first) + " " + std::to_string(_node_idx_pair.second) + " "
+        + std::to_string(t.x()) + " " + std::to_string(t.y()) + " " + std::to_string(t.z())  + " " 
+        + std::to_string(R.toQuaternion().x()) + " " + std::to_string(R.toQuaternion().y()) + " " 
+        + std::to_string(R.toQuaternion().z()) + " " + std::to_string(R.toQuaternion().w()) };
+
+    // pgEdgeSaveStream << curEdgeInfo << std::endl;
+    edges_str.emplace_back(curEdgeInfo);
 }
 
 gtsam::Pose3 Pose6DtoGTSAMPose3(const Pose6D& p)
@@ -455,7 +504,8 @@ void pubPath( void )
     q.setY(odomAftPGO.pose.pose.orientation.y);
     q.setZ(odomAftPGO.pose.pose.orientation.z);
     transform.setRotation(q);
-    br.sendTransform(tf::StampedTransform(transform, odomAftPGO.header.stamp, "camera_init", "/aft_pgo"));
+    // The tf broadcaster causes lots of repeated message warnings, so it is commented out.
+    // br.sendTransform(tf::StampedTransform(transform, odomAftPGO.header.stamp, "camera_init", "/aft_pgo"));
 } // pubPath
 
 void updatePoses(void)
@@ -771,6 +821,7 @@ void process_pg()
                     // prior factor 
                     gtSAMgraph.add(gtsam::PriorFactor<gtsam::Pose3>(init_node_idx, poseOrigin, priorNoise));
                     initialEstimate.insert(init_node_idx, poseOrigin);
+                    writeVertex(init_node_idx, poseOrigin);
                     newStateTimes.push_back(timeLaser);
                     // runISAM2opt();          
                 }
@@ -789,7 +840,7 @@ void process_pg()
                     // odom factor
                     // poseFrom.between(poseTo) means poseFrom.inverse() * poseTo
                     gtSAMgraph.add(gtsam::BetweenFactor<gtsam::Pose3>(prev_node_idx, curr_node_idx, poseFrom.between(poseTo), odomNoise));
-
+                    writeEdge({prev_node_idx, curr_node_idx}, poseFrom.between(poseTo));
                     // gps factor 
                     if(hasGPSforThisKF) {
                         double curr_altitude_offseted = currGPS->altitude - gpsAltitudeInitOffset;
@@ -798,6 +849,7 @@ void process_pg()
                         cout << "GPS factor added at node " << curr_node_idx << endl;
                     }
                     initialEstimate.insert(curr_node_idx, poseTo);
+                    writeVertex(curr_node_idx, poseTo);
                     newStateTimes.push_back(timeLaser);            
                     // runISAM2opt();
                 }
@@ -810,7 +862,17 @@ void process_pg()
             // save utility 
             std::string curr_node_idx_str = padZeros(curr_node_idx);
             pcl::io::savePCDFileBinary(pgScansDirectory + curr_node_idx_str + ".pcd", *thisKeyFrame); // scan 
-            pgTimeSaveStream << timeLaser << std::endl; // path 
+            pgTimeSaveStream << timeLaser << std::endl; // path
+            
+            // save sc data
+            const auto& curr_scd = scManager.getConstRefRecentSCD();
+            if (curr_node_idx != scManager.polarcontexts_.size() - 1) {
+                std::cerr << "Inconsistent scan context sizes curr_node_idx + 1: " << curr_node_idx + 1
+                          << ", scManager.polarcontexts_.size(): " << scManager.polarcontexts_.size() << std::endl;
+            }
+            saveSCD(saveSCDDirectory + curr_node_idx_str + ".scd", curr_scd);
+
+            // TODO: save g2o vertices and edges at the end
         }
 
         // ps. 
@@ -822,6 +884,15 @@ void process_pg()
         std::this_thread::sleep_for(dura);
         shutdown = terminator.quit();
         if (shutdown) {
+          // save pose graph (runs when programe is closing)
+          cout << "****************************************************" << endl; 
+          cout << "Saving the posegraph ..." << endl; // giseop
+          for(auto& _line: vertices_str)
+            pgSaveStream << _line << std::endl;
+          for(auto& _line: edges_str)
+            pgSaveStream << _line << std::endl;
+          pgSaveStream.close();
+
           pgTimeSaveStream.close();
           scanMatchStream.close();
           break;
@@ -1007,6 +1078,7 @@ void process_icp(void)
                 gtsam::Pose3 relative_pose = relative_pose_optional.value();
                 mtxPosegraph.lock();
                 gtSAMgraph.add(gtsam::BetweenFactor<gtsam::Pose3>(prev_node_idx, curr_node_idx, relative_pose, robustLoopNoise));
+                writeEdge({prev_node_idx, curr_node_idx}, relative_pose);
                 // runISAM2opt();
                 mtxPosegraph.unlock();
                 mKF.lock();
@@ -1112,6 +1184,10 @@ int main(int argc, char **argv)
 	nh.param<std::string>("save_directory", save_directory, "/"); // pose assignment every k m move 
     pgTUMFormat = save_directory + "keyscan_optimized_poses.txt";
     odomTUMFormat = save_directory + "keyscan_odom_poses.txt";
+
+    pgSaveStream = std::fstream(save_directory + "singlesession_posegraph.g2o", std::fstream::out);
+    pgSaveStream.precision(std::numeric_limits<double>::max_digits10);
+
     pgTimeSaveStream = std::fstream(save_directory + "keyscan_times.txt", std::fstream::out); 
     pgTimeSaveStream.precision(std::numeric_limits<double>::max_digits10);
     scanMatchStream = std::ofstream(save_directory + "keyscan_matches.txt", std::fstream::out);
@@ -1119,6 +1195,11 @@ int main(int argc, char **argv)
     auto unused = system((std::string("mkdir -p ") + pgScansDirectory).c_str());
     unused = system((std::string("exec rm -r ") + pgScansDirectory).c_str());
     unused = system((std::string("mkdir -p ") + pgScansDirectory).c_str());
+
+    saveSCDDirectory = save_directory + "SCDs/"; // SCD: scan context descriptor 
+    unused = system((std::string("mkdir -p ") + saveSCDDirectory).c_str());
+    unused = system((std::string("exec rm -r ") + saveSCDDirectory).c_str());
+    unused = system((std::string("mkdir -p ") + saveSCDDirectory).c_str());
 
 	nh.param<double>("keyframe_meter_gap", keyframeMeterGap, 2.0); // pose assignment every k m move 
 	nh.param<double>("keyframe_deg_gap", keyframeDegGap, 10.0); // pose assignment every k deg rot 
