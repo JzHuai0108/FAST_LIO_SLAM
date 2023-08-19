@@ -94,6 +94,13 @@ roslaunch aloam_velodyne aloam_hesai32.launch save_directory:=/home/pi/Desktop/t
 rosbag play /media/pi/BackupPlus/jhuai/data/hiltislam2022/exp21_outside_building.bag
 ```
 
+### Coloradar dataset
+```
+mkdir -p /home/pi/Desktop/temp/arpg_lab_run1
+export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:~/Documents/slam_devel/lib
+roslaunch aloam_velodyne fastlio_ouster64_coloradar.launch save_directory:=/home/pi/Desktop/temp/arpg_lab_run1/ bagname:=/media/pi/BackupPlus/jhuai/data/coloradar/rosbags/arpg_lab_run1.bag
+```
+
 ### Custom dataset
 Create launch files following the above examples, noting that the aloam nodes should be disabled and 
 that aloam outputs should be substituted for by the fastlio outputs as in aloam_velodyne_HDL_32.launch.

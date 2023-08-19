@@ -71,6 +71,7 @@ double T1[MAXN], s_plot[MAXN], s_plot2[MAXN], s_plot3[MAXN], s_plot4[MAXN], s_pl
 double match_time = 0, solve_time = 0, solve_const_H_time = 0;
 int    kdtree_size_st = 0, kdtree_size_end = 0, add_point_size = 0, kdtree_delete_counter = 0;
 bool   runtime_pos_log = false, pcd_save_en = false, time_sync_en = false, extrinsic_est_en = true, path_en = true;
+bool publish_cloud_in_imu_frame = true;
 /**************************/
 
 float res_last[100000] = {0.0};
@@ -165,22 +166,10 @@ inline void dump_lio_state_to_log(double lidar_end_time, const state_ikfom& stat
     // fflush(fp);
 }
 
-void pointBodyToWorld_ikfom(PointType const * const pi, PointType * const po, state_ikfom &s)
-{
-    V3D p_body(pi->x, pi->y, pi->z);
-    V3D p_global(s.rot * (s.offset_R_L_I*p_body + s.offset_T_L_I) + s.pos);
-
-    po->x = p_global(0);
-    po->y = p_global(1);
-    po->z = p_global(2);
-    po->intensity = pi->intensity;
-}
-
-
 void pointBodyToWorld(PointType const * const pi, PointType * const po)
 {
-    V3D p_body(pi->x, pi->y, pi->z);
-    V3D p_global(state_point.rot * (state_point.offset_R_L_I*p_body + state_point.offset_T_L_I) + state_point.pos);
+    V3D p_lidar(pi->x, pi->y, pi->z);
+    V3D p_global(state_point.rot * (state_point.offset_R_L_I*p_lidar + state_point.offset_T_L_I) + state_point.pos);
 
     po->x = p_global(0);
     po->y = p_global(1);
@@ -191,8 +180,8 @@ void pointBodyToWorld(PointType const * const pi, PointType * const po)
 template<typename T>
 void pointBodyToWorld(const Matrix<T, 3, 1> &pi, Matrix<T, 3, 1> &po)
 {
-    V3D p_body(pi[0], pi[1], pi[2]);
-    V3D p_global(state_point.rot * (state_point.offset_R_L_I*p_body + state_point.offset_T_L_I) + state_point.pos);
+    V3D p_lidar(pi[0], pi[1], pi[2]);
+    V3D p_global(state_point.rot * (state_point.offset_R_L_I*p_lidar + state_point.offset_T_L_I) + state_point.pos);
 
     po[0] = p_global(0);
     po[1] = p_global(1);
@@ -201,8 +190,8 @@ void pointBodyToWorld(const Matrix<T, 3, 1> &pi, Matrix<T, 3, 1> &po)
 
 void RGBpointBodyToWorld(PointType const * const pi, PointType * const po)
 {
-    V3D p_body(pi->x, pi->y, pi->z);
-    V3D p_global(state_point.rot * (state_point.offset_R_L_I*p_body + state_point.offset_T_L_I) + state_point.pos);
+    V3D p_lidar(pi->x, pi->y, pi->z);
+    V3D p_global(state_point.rot * (state_point.offset_R_L_I*p_lidar + state_point.offset_T_L_I) + state_point.pos);
 
     po->x = p_global(0);
     po->y = p_global(1);
@@ -212,12 +201,12 @@ void RGBpointBodyToWorld(PointType const * const pi, PointType * const po)
 
 void RGBpointBodyLidarToIMU(PointType const * const pi, PointType * const po)
 {
-    V3D p_body_lidar(pi->x, pi->y, pi->z);
-    V3D p_body_imu(state_point.offset_R_L_I*p_body_lidar + state_point.offset_T_L_I);
+    V3D p_lidar(pi->x, pi->y, pi->z);
+    V3D p_imu(state_point.offset_R_L_I*p_lidar + state_point.offset_T_L_I);
 
-    po->x = p_body_imu(0);
-    po->y = p_body_imu(1);
-    po->z = p_body_imu(2);
+    po->x = p_imu(0);
+    po->y = p_imu(1);
+    po->z = p_imu(2);
     po->intensity = pi->intensity;
 }
 
@@ -540,16 +529,20 @@ void publish_frame_world(const ros::Publisher & pubLaserCloudFull)
 void publish_frame_body(const ros::Publisher & pubLaserCloudFull_body)
 {
     int size = feats_undistort->points.size();
-    PointCloudXYZI::Ptr laserCloudIMUBody(new PointCloudXYZI(size, 1));
+    sensor_msgs::PointCloud2 laserCloudmsg;
+    if (publish_cloud_in_imu_frame) {
+        PointCloudXYZI::Ptr laserCloudIMUBody(new PointCloudXYZI(size, 1));
 
-    for (int i = 0; i < size; i++)
-    {
-        RGBpointBodyLidarToIMU(&feats_undistort->points[i], \
-                            &laserCloudIMUBody->points[i]);
+        for (int i = 0; i < size; i++)
+        {
+            RGBpointBodyLidarToIMU(&feats_undistort->points[i], \
+                                &laserCloudIMUBody->points[i]);
+        }
+        pcl::toROSMsg(*laserCloudIMUBody, laserCloudmsg);
+    } else {
+        pcl::toROSMsg(*feats_undistort, laserCloudmsg);
     }
 
-    sensor_msgs::PointCloud2 laserCloudmsg;
-    pcl::toROSMsg(*laserCloudIMUBody, laserCloudmsg);
     laserCloudmsg.header.stamp = ros::Time().fromSec(lidar_end_time);
     laserCloudmsg.header.frame_id = "body";
     pubLaserCloudFull_body.publish(laserCloudmsg);
@@ -599,7 +592,19 @@ void publish_odometry(const ros::Publisher & pubOdomAftMapped)
     odomAftMapped.header.frame_id = "camera_init";
     odomAftMapped.child_frame_id = "body";
     odomAftMapped.header.stamp = ros::Time().fromSec(lidar_end_time);// ros::Time().fromSec(lidar_end_time);
-    set_posestamp(odomAftMapped.pose);
+    if (publish_cloud_in_imu_frame)
+        set_posestamp(odomAftMapped.pose);
+    else {
+        SO3 odom_R_lidar = state_point.rot * state_point.offset_R_L_I;
+        V3D odom_t_lidar = state_point.pos + state_point.rot * state_point.offset_T_L_I;
+        odomAftMapped.pose.pose.position.x = odom_t_lidar[0];
+        odomAftMapped.pose.pose.position.y = odom_t_lidar[1];
+        odomAftMapped.pose.pose.position.z = odom_t_lidar[2];
+        odomAftMapped.pose.pose.orientation.x = odom_R_lidar.coeffs()[0];
+        odomAftMapped.pose.pose.orientation.y = odom_R_lidar.coeffs()[1];
+        odomAftMapped.pose.pose.orientation.z = odom_R_lidar.coeffs()[2];
+        odomAftMapped.pose.pose.orientation.w = odom_R_lidar.coeffs()[3];
+    }
     pubOdomAftMapped.publish(odomAftMapped);
     auto P = kf.get_P();
     for (int i = 0; i < 6; i ++)
@@ -796,6 +801,7 @@ int main(int argc, char** argv)
     nh.param<bool>("runtime_pos_log_enable", runtime_pos_log, 0);
     nh.param<bool>("mapping/extrinsic_est_en", extrinsic_est_en, true);
     nh.param<bool>("pcd_save/pcd_save_en", pcd_save_en, false);
+    nh.param<bool>("publish/publish_cloud_in_imu_frame", publish_cloud_in_imu_frame, true);
     nh.param<int>("pcd_save/interval", pcd_save_interval, -1);
     nh.param<vector<double>>("mapping/extrinsic_T", extrinT, vector<double>());
     nh.param<vector<double>>("mapping/extrinsic_R", extrinR, vector<double>());
@@ -803,7 +809,7 @@ int main(int argc, char** argv)
     nh.param<string>("save_directory", state_log_dir, "");
     cout<<"p_pre->lidar_type "<<p_pre->lidar_type<<endl;
     if (state_log_dir.empty()) {
-      cout << "You have to provide save_directory to make the saving functions work properly." << std::endl;
+      cerr << "You have to provide save_directory to make the saving functions work properly." << std::endl;
       return 0;
     }
     cout << "state log dir: " << state_log_dir << endl;

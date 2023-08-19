@@ -1,5 +1,5 @@
 common:
-    lid_topic:  "/hesai/pandar"
+    lid_topic:  "/hesai/pandar"  # for hiltislam2022 datasets
     imu_topic:  "/alphasense/imu"
     time_sync_en: false         # ONLY turn on when external time synchronization is really not possible
     time_offset_lidar_to_imu: 0.00176257  # lidar clock for lidar messages + time_offset_lidar_to_imu == imu clock for imu messages.
@@ -26,7 +26,8 @@ mapping:
 publish:     
     scan_publish_en:  true       # 'false' will close all the point cloud output
     dense_publish_en: false       # false will low down the points number in a global-frame point clouds scan.
-    scan_bodyframe_pub_en: true  # output the point cloud scans in IMU-body-frame
+    scan_bodyframe_pub_en: true  # output the point cloud scans in a body frame
+    publish_cloud_in_imu_frame: false # output the point cloud scans in IMU-frame or lidar-frame
 
 pcd_save:
     pcd_save_en: false

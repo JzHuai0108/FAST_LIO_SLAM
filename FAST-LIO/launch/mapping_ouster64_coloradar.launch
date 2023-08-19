@@ -1,17 +1,16 @@
 <launch>
-  <!-- Launch file for kuangye hesai32 LiDAR -->
+<!-- Launch file for ouster OS1-64 LiDAR. Sadly, coloradar ouster pointclouds has time field filled with zeros. -->
 
     <arg name="rviz" default="true" />
     <arg name="save_directory" default="$(find fast_lio)/Log" />
-    <rosparam command="load" file="$(find fast_lio)/config/kuangye_hesai32.yaml" />
+    <rosparam command="load" file="$(find fast_lio)/config/ouster64_coloradar.yaml" />
 
     <param name="feature_extract_enable" type="bool" value="0"/>
-    <param name="pcd_save_enable" type="int" value = "1" />
     <param name="point_filter_num" type="int" value="4"/>
     <param name="max_iteration" type="int" value="4" />
-    <param name="filter_size_surf" type="double" value="0.25" />
-    <param name="filter_size_map" type="double" value="0.25" />
-    <param name="cube_side_length" type="double" value="1000" />
+    <param name="filter_size_surf" type="double" value="0.5" />
+    <param name="filter_size_map" type="double" value="0.5" />
+    <param name="cube_side_length" type="double" value="500" />
     <param name="runtime_pos_log_enable" type="bool" value="0" />
     <param name="save_directory" type="string" value="$(arg save_directory)" />
     <node pkg="fast_lio" type="fastlio_mapping" name="laserMapping" output="screen" /> 
