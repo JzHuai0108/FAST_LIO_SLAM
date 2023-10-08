@@ -1,0 +1,60 @@
+<launch>
+    <arg name="terminate_at_end" default="false" />
+    <arg name="use_gps" default="false" />
+    <arg name="radius_search" default="true" />
+    <arg name="sc_filter_size" default="0.1" />
+    <arg name="save_directory" default="$(env HOME)/Desktop/temp/sc_pgo_data/" />
+    <param name="terminate_at_end" type="bool" value="$(arg terminate_at_end)"/>
+    <param name="use_gps" type="bool" value="$(arg use_gps)" />
+    <param name="scan_line" type="int" value="16" />
+
+    <!-- if 1, do mapping 10 Hz, if 2, do mapping 5 Hz. Suggest to use 1, it will adjust frequence automaticlly -->
+    <param name="mapping_skip_frame" type="int" value="1" />
+
+    <!-- remove too closed points -->
+    <param name="minimum_range" type="double" value="0.3"/>
+
+    <param name="mapping_line_resolution" type="double" value="0.2"/>
+    <param name="mapping_plane_resolution" type="double" value="0.4"/>
+
+    <param name="sc_filter_size" type="double" value="$(arg sc_filter_size)"/>
+    <param name="mapviz_filter_size" type="double" value="0.1"/>
+
+    <!-- SC-A-LOAM -->
+    <param name="keyframe_meter_gap" type="double" value="1.0"/> 
+
+    <!-- Scan Context -->
+    <param name="sc_dist_thres" type="double" value="0.2"/> <!-- SC-A-LOAM, if want no outliers, use 0.1-0.15 -->
+    <!-- <param name="sc_max_radius" type="double" value="20.0"/> 20 or 40 for indoor -->
+    <param name="sc_max_radius" type="double" value="80.0"/> <!-- for outdoor -->
+
+    <!-- radius search -->
+    <param name="radius_search" type="bool" value="$(arg radius_search)"/>
+    <param name="historyKeyframeSearchRadius" value="10.0"/>
+    <param name="historyKeyframeSearchTimeDiff" value="30.0"/>
+    <param name="historyKeyframeSearchNum" value="3"/>
+    <param name="loopClosureFrequency" value="2.0"/>
+    <param name="graphUpdateFrequency" value="2.0"/>
+    <param name="graphUpdateTimes" value="2"/>
+    <param name="loopNoiseScore" value="0.2"/>
+    <param name="vizmapFrequency" value="1"/>
+
+    <!--  -->
+    <param name="lidar_type" type="string" value="VLP16"/> 
+    <!-- input from FASTLIO2 -->
+    <remap from="/aft_mapped_to_init" to="/Odometry"/>
+    <remap from="/velodyne_cloud_registered_local" to="/cloud_registered_body"/>
+
+    <param name="save_directory" type="string" value="$(arg save_directory)"/>  <!-- CHANGE THIS and end with / -->
+
+    <!-- <node pkg="aloam_velodyne" type="ascanRegistration" name="ascanRegistration" output="screen" />
+    <node pkg="aloam_velodyne" type="alaserOdometry" name="alaserOdometry" output="screen" />
+    <node pkg="aloam_velodyne" type="alaserMapping" name="alaserMapping" output="screen" /> -->
+    <node pkg="aloam_velodyne" type="alaserPGO" name="alaserPGO" output="screen" required="false"/> <!-- SC-A-LOAM -->
+
+    <arg name="rviz" default="true" />
+    <group if="$(arg rviz)">
+        <node launch-prefix="nice" pkg="rviz" type="rviz" name="pgo_rviz" args="-d $(find aloam_velodyne)/rviz_cfg/aloam_velodyne.rviz" />
+    </group>
+
+</launch>

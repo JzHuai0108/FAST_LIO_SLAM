@@ -105,6 +105,22 @@ roslaunch aloam_velodyne fastlio_ouster64_coloradar.launch save_directory:=/home
 Create launch files following the above examples, noting that the aloam nodes should be disabled and 
 that aloam outputs should be substituted for by the fastlio outputs as in aloam_velodyne_HDL_32.launch.
 
+```
+source devel/setup.bash
+roslaunch fast_lio mapping_vlp16_whu_ugv.launch save_directory:=/home/jhuai/Desktop/temp/
+
+
+source devel/setup.bash
+export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:~/Documents/slam_devel/lib
+roslaunch aloam_velodyne aloam_vlp16_whu_ugv.launch save_directory:=/home/jhuai/Desktop/temp/
+
+rosbag play /media/jhuai/SeagateData/jhuai/data/homebrew/mycar_nav/20221021/lidar1.bag \
+    /media/jhuai/SeagateData/jhuai/data/homebrew/mycar_nav/20221021/radar1.bag -s 100
+
+rosbag play /media/jhuai/SeagateData/jhuai/data/homebrew/mycar_nav/20230814/lidar7.bag \
+    /media/jhuai/SeagateData/jhuai/data/homebrew/mycar_nav/20230814/radar7.bag -s 40
+
+```
 
 ## Utility
 - We support keyframe scan saver (as in .pcd) and provide a script reconstructs a point cloud map by merging the saved scans using the optimized poses. See [here](https://github.com/gisbi-kim/FAST_LIO_SLAM/blob/bf975560741c425f71811c864af5d35aa880c797/SC-PGO/utils/python/makeMergedMap.py#L7).

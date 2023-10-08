@@ -14,17 +14,17 @@ preprocess:
     blind: 1
 
 mapping:
-    acc_cov: 0.1
-    gyr_cov: 0.1
-    b_acc_cov: 0.001
-    b_gyr_cov: 0.001
+    acc_cov: 0.5  # 0.01 for bynav # 0.5 for zed
+    gyr_cov: 0.4  # 0.01 for bynav # 0.5 for zed
+    b_acc_cov: 0.01  # 0.001 for bynav, 0.01 for zed
+    b_gyr_cov: 0.01  # 0.001 for bynav, 0.01 for zed
     fov_degree:    180
     det_range:     100.0
     extrinsic_est_en:  false      # true: enable the online estimation of IMU-LiDAR extrinsic,
-    extrinsic_T: [-0.2, 0, 0.2] # for zed IMU
-    extrinsic_R: [1.0, 0, 0,
-                  0, 1.0, 0,
-                  0, 0, 1.0]
+    extrinsic_T: [-0.04, 0, 0.2] # for zed IMU
+    extrinsic_R: [ 0.9837555,  0.1794992,  0.0022808,
+                  -0.1795134,  0.9836982,  0.0106141,
+                  -0.0003384, -0.0108511,  0.9999411]
 
     # extrinsic_T: [-0.06, 0, 0.18] # for bynav IMU
     # extrinsic_R: [0, -1, 0,

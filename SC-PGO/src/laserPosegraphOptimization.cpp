@@ -1178,6 +1178,7 @@ int main(int argc, char **argv)
 	ros::NodeHandle nh;
 	bool terminateAtEnd = false;
 	nh.param<bool>("terminate_at_end", terminateAtEnd, false);
+    nh.param<bool>("use_gps", useGPS, true);
 	if (!terminateAtEnd) {
 		 terminator.setWaitPacketsForNextPacket(-1);
 	}
