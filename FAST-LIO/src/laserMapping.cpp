@@ -493,30 +493,34 @@ void publish_frame_world(const ros::Publisher & pubLaserCloudFull)
         int size = feats_undistort->points.size();
         PointCloudXYZI::Ptr laserCloudWorld( \
                         new PointCloudXYZI(size, 1));
-
-        for (int i = 0; i < size; i++)
-        {
-            /*RGBpointBodyToWorld(&feats_undistort->points[i], \
-                                &laserCloudWorld->points[i]);*/
-            // save the pointcloud in the local IMU frame.
-            Matrix<double, 3, 1> temp;
-            temp(0) = feats_undistort->points[i].x;
-            temp(1) = feats_undistort->points[i].y;
-            temp(2) = feats_undistort->points[i].z;
-            temp = state_point.offset_R_L_I*temp + state_point.offset_T_L_I;
-            laserCloudWorld->points[i].x = temp(0);
-            laserCloudWorld->points[i].y = temp(1);
-            laserCloudWorld->points[i].z = temp(2);
-            laserCloudWorld->points[i].intensity = feats_undistort->points[i].intensity;
+        if (pcd_save_interval == 1) {
+            for (int i = 0; i < size; i++) {
+                // save the pointcloud in the local IMU frame.
+                Matrix<double, 3, 1> temp;
+                temp(0) = feats_undistort->points[i].x;
+                temp(1) = feats_undistort->points[i].y;
+                temp(2) = feats_undistort->points[i].z;
+                temp = state_point.offset_R_L_I*temp + state_point.offset_T_L_I;
+                laserCloudWorld->points[i].x = temp(0);
+                laserCloudWorld->points[i].y = temp(1);
+                laserCloudWorld->points[i].z = temp(2);
+                laserCloudWorld->points[i].intensity = feats_undistort->points[i].intensity;
+            }
+            *pcl_wait_save = *laserCloudWorld;
+        } else {
+            for (int i = 0; i < size; i++) {
+                RGBpointBodyToWorld(&feats_undistort->points[i], \
+                                    &laserCloudWorld->points[i]);
+            }
+            *pcl_wait_save += *laserCloudWorld;
         }
-        *pcl_wait_save += *laserCloudWorld;
 
         static int scan_wait_num = 0;
         scan_wait_num ++;
         if (pcl_wait_save->size() > 0 && pcd_save_interval > 0  && scan_wait_num >= pcd_save_interval)
         {
             pcd_index ++;
-            string all_points_dir(string(string(ROOT_DIR) + "PCD/scans_") + to_string(pcd_index) + string(".pcd"));
+            string all_points_dir(string(state_log_dir + "/PCD/scans_") + to_string(pcd_index) + string(".pcd"));
             pcl::PCDWriter pcd_writer;
             cout << "current scan saved to " << all_points_dir << endl;
             pcd_writer.writeBinary(all_points_dir, *pcl_wait_save);
@@ -1046,9 +1050,9 @@ int main(int argc, char** argv)
     if (pcl_wait_save->size() > 0 && pcd_save_en)
     {
         string file_name = string("scans.pcd");
-        string all_points_dir(string(string(ROOT_DIR) + "PCD/") + file_name);
+        string all_points_dir(string(state_log_dir + "/") + file_name);
         pcl::PCDWriter pcd_writer;
-        cout << "current scan saved to /PCD/" << file_name<<endl;
+        cout << "current scan saved to " << all_points_dir <<endl;
         pcd_writer.writeBinary(all_points_dir, *pcl_wait_save);
     }
 
@@ -1060,7 +1064,7 @@ int main(int argc, char** argv)
     {
         vector<double> t, s_vec, s_vec2, s_vec3, s_vec4, s_vec5, s_vec6, s_vec7;    
         FILE *fp2;
-        string log_dir = root_dir + "/Log/fast_lio_time_log.csv";
+        string log_dir = state_log_dir + "/Log/fast_lio_time_log.csv";
         fp2 = fopen(log_dir.c_str(),"w");
         fprintf(fp2,"time_stamp, total time, scan point size, incremental time, search time, delete size, delete time, tree size st, tree size end, add point size, preprocess time\n");
         for (int i = 0;i<time_log_counter; i++){

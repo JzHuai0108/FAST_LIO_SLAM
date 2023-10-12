@@ -3,7 +3,7 @@ common:
     # imu_topic: "/imu_raw"
     imu_topic:  "/zed2/zed_node/imu/data"
     time_sync_en: false         # ONLY turn on when external time synchronization is really not possible
-    time_offset_lidar_to_imu: 0.0 # Time offset between lidar and IMU calibrated by other algorithms, e.g. LI-Init (can be found in README).
+    time_offset_lidar_to_imu: -0.066558 # Time offset between lidar and IMU calibrated by other algorithms, e.g. LI-Init (can be found in README).
                                   # This param will take effect no matter what time_sync_en is. So if the time offset is not known exactly, please set as 0.0
 
 preprocess:
@@ -22,9 +22,9 @@ mapping:
     det_range:     100.0
     extrinsic_est_en:  false      # true: enable the online estimation of IMU-LiDAR extrinsic,
     extrinsic_T: [-0.04, 0, 0.2] # for zed IMU
-    extrinsic_R: [ 0.9837555,  0.1794992,  0.0022808,
-                  -0.1795134,  0.9836982,  0.0106141,
-                  -0.0003384, -0.0108511,  0.9999411]
+    extrinsic_R: [0.994873094828548,  0.10108515966474,      -0.00305216018936321,
+        -0.101006889512667,         0.994693400508561,        0.0195613715186629,
+        0.0050133279608804,       -0.0191527930148416,         0.999803999323111]
 
     # extrinsic_T: [-0.06, 0, 0.18] # for bynav IMU
     # extrinsic_R: [0, -1, 0,
