@@ -2,6 +2,7 @@
 #define SO3_MATH_H
 
 #include <math.h>
+#include <vector>
 #include <Eigen/Core>
 
 #define SKEW_SYM_MATRX(v) 0.0,-v[2],v[1],v[2],0.0,-v[0],-v[1],v[0],0.0
@@ -106,6 +107,24 @@ Eigen::Matrix<T, 3, 1> RotMtoEuler(const Eigen::Matrix<T, 3, 3> &rot)
     }
     Eigen::Matrix<T, 3, 1> ang(x, y, z);
     return ang;
+}
+
+template<typename T>
+Eigen::Matrix<T, 3, 3> EulerToRotM(const std::vector<T> &rpy) {   
+    Eigen::Matrix<T, 3, 3> rot;
+    T r = rpy[0];
+    T p = rpy[1];
+    T y = rpy[2];
+    T cr = cos(r);
+    T sr = sin(r);
+    T cp = cos(p);
+    T sp = sin(p);
+    T cy = cos(y);
+    T sy = sin(y);
+    rot << cp*cy, (sr*sp*cy-cr*sy), (cr*sp*cy+sr*sy),
+           cp*sy, (sr*sp*sy+cr*cy), (cr*sp*sy-sr*cy),
+           -sp, sr*cp, cr*cp;
+    return rot;
 }
 
 #endif

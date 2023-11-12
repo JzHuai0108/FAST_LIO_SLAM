@@ -45,6 +45,7 @@ class ImuProcess
   void set_extrinsic(const V3D &transl, const M3D &rot);
   void set_extrinsic(const V3D &transl);
   void set_extrinsic(const MD(4,4) &T);
+  void set_init_pose(const V3D &W_t_B, const M3D &W_R_B);
   void set_gyr_cov(const V3D &scaler);
   void set_acc_cov(const V3D &scaler);
   void set_gyr_bias_cov(const V3D &b_g);
@@ -83,8 +84,9 @@ class ImuProcess
   int    init_iter_num = 1;
   bool   b_first_frame_ = true;
   bool   imu_need_init_ = true;
-  // double state_time_ = 0;
-  // Eigen::Quaterniond imu_orientation_;
+  M3D W_R_imu; // IMU orientation in the world frame which has z along negative gravity.
+  V3D W_t_imu; // IMU position in the world frame
+  bool   use_external_pose_ = false;
 };
 
 ImuProcess::ImuProcess()
@@ -138,6 +140,12 @@ void ImuProcess::set_extrinsic(const V3D &transl, const M3D &rot)
 {
   Lidar_T_wrt_IMU = transl;
   Lidar_R_wrt_IMU = rot;
+}
+
+void ImuProcess::set_init_pose(const V3D &W_t_B, const M3D &W_R_B) {
+  W_t_imu = W_t_B;
+  W_R_imu = W_R_B;
+  use_external_pose_ = true;
 }
 
 void ImuProcess::set_gyr_cov(const V3D &scaler)
@@ -221,6 +229,13 @@ void ImuProcess::IMU_init(const MeasureGroup &meas, esekfom::esekf<state_ikfom, 
 
   init_state.offset_T_L_I = Lidar_T_wrt_IMU;
   init_state.offset_R_L_I = Lidar_R_wrt_IMU;
+  if (use_external_pose_) {
+    init_state.pos = W_t_imu;
+    init_state.rot = SO3(W_R_imu);
+    init_state.grav = S2(0, 0, -G_m_s2);
+    ROS_INFO_STREAM("Init pose with external translation " << W_t_imu.transpose() << " and rotation\n"
+         << W_R_imu << "\nand gravity " << init_state.grav.get_vect().transpose());
+  }
   kf_state.change_x(init_state);
 
   esekfom::esekf<state_ikfom, 12, input_ikfom>::cov init_P = kf_state.get_P();

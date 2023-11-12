@@ -39,7 +39,7 @@
 #include <fstream>
 #include <csignal>
 #include <unistd.h>
-#include <Python.h>
+// #include <Python.h>
 #include <so3_math.h>
 #include <ros/ros.h>
 #include <Eigen/Core>
@@ -56,7 +56,7 @@
 #include <tf/transform_datatypes.h>
 #include <tf/transform_broadcaster.h>
 #include <geometry_msgs/Vector3.h>
-#include <livox_ros_driver/CustomMsg.h>
+#include <livox_ros_driver2/CustomMsg.h>
 #include "preprocess.h"
 #include <ikd-Tree/ikd_Tree.h>
 
@@ -119,6 +119,11 @@ pcl::VoxelGrid<PointType> downSizeFilterSurf;
 pcl::VoxelGrid<PointType> downSizeFilterMap;
 
 KD_TREE<PointType> ikdtree;
+bool locmode = false;
+std::string pcdmap = "";
+vector<double> init_world_t_imu(3, 0.0);
+vector<double> init_world_rpy_imu(3, 0.0);
+M3D init_world_R_imu(Eye3d);
 
 V3F XAxisPoint_body(LIDAR_SP_LEN, 0.0, 0.0);
 V3F XAxisPoint_world(LIDAR_SP_LEN, 0.0, 0.0);
@@ -260,11 +265,12 @@ void lasermap_fov_segment()
         }
     }
     LocalMap_Points = New_LocalMap_Points;
-
-    points_cache_collect();
-    double delete_begin = omp_get_wtime();
-    if(cub_needrm.size() > 0) kdtree_delete_counter = ikdtree.Delete_Point_Boxes(cub_needrm);
-    kdtree_delete_time = omp_get_wtime() - delete_begin;
+    if (!locmode) {
+        points_cache_collect();
+        double delete_begin = omp_get_wtime();
+        if(cub_needrm.size() > 0) kdtree_delete_counter = ikdtree.Delete_Point_Boxes(cub_needrm);
+        kdtree_delete_time = omp_get_wtime() - delete_begin;
+    }
 }
 
 void standard_pcl_cbk(const sensor_msgs::PointCloud2::ConstPtr &msg) 
@@ -290,7 +296,7 @@ void standard_pcl_cbk(const sensor_msgs::PointCloud2::ConstPtr &msg)
 
 double timediff_lidar_wrt_imu = 0.0;
 bool   timediff_set_flg = false;
-void livox_pcl_cbk(const livox_ros_driver::CustomMsg::ConstPtr &msg) 
+void livox_pcl_cbk(const livox_ros_driver2::CustomMsg::ConstPtr &msg) 
 {
     mtx_buffer.lock();
     double preprocess_start_time = omp_get_wtime();
@@ -458,6 +464,23 @@ void map_incremental()
     ikdtree.Add_Points(PointNoNeedDownsample, false); 
     add_point_size = PointToAdd.size() + PointNoNeedDownsample.size();
     kdtree_incremental_time = omp_get_wtime() - st_time;
+}
+
+void load_pcd_map() {
+    PointCloudXYZI::Ptr map(new PointCloudXYZI());
+    pcl::io::loadPCDFile<PointType>(pcdmap, *map);
+    downSizeFilterMap.setInputCloud(map);
+    PointCloudXYZI::Ptr map_ds(new PointCloudXYZI());
+    downSizeFilterMap.filter(*map_ds);
+    PointVector PointToAdd;
+    PointToAdd.reserve(map_ds->points.size());
+    for (int i = 0; i < map_ds->points.size(); i++)
+    {
+        PointToAdd.push_back(map_ds->points[i]);
+    }
+    ikdtree.Build(PointToAdd);
+    ROS_INFO("Load pcd map of %zu points downsampled from %zu from %s.", 
+            PointToAdd.size(), map->points.size(), pcdmap.c_str());
 }
 
 PointCloudXYZI::Ptr pcl_wait_pub(new PointCloudXYZI(500000, 1));
@@ -807,10 +830,19 @@ int main(int argc, char** argv)
     nh.param<bool>("pcd_save/pcd_save_en", pcd_save_en, false);
     nh.param<bool>("publish/publish_cloud_in_imu_frame", publish_cloud_in_imu_frame, true);
     nh.param<int>("pcd_save/interval", pcd_save_interval, -1);
+    nh.param<bool>("locmode", locmode, false);
+    nh.param<std::string>("pcdmap", pcdmap, "");
     nh.param<vector<double>>("mapping/extrinsic_T", extrinT, vector<double>());
     nh.param<vector<double>>("mapping/extrinsic_R", extrinR, vector<double>());
     nh.param<double>("mapping/gravity_m_s2", p_imu->G_m_s2, 9.81);
     nh.param<string>("save_directory", state_log_dir, "");
+    nh.param<vector<double>>("mapping/init_world_t_imu", init_world_t_imu, vector<double>());
+    nh.param<vector<double>>("mapping/init_world_rpy_imu", init_world_rpy_imu, vector<double>());
+    init_world_R_imu = EulerToRotM(init_world_rpy_imu);
+    cout << "locmode?" << locmode << ", filter_size_map " << filter_size_map_min << std::endl;
+    cout << "init_world_t_imu: " << init_world_t_imu[0] << " " << init_world_t_imu[1] << " " << init_world_t_imu[2] << endl;
+    cout << "init_world_rpy_imu: " << init_world_rpy_imu[0] << " " << init_world_rpy_imu[1] << " " << init_world_rpy_imu[2] << endl;
+    cout << "init_world_R_imu: " << endl << init_world_R_imu << endl;
     cout<<"p_pre->lidar_type "<<p_pre->lidar_type<<endl;
     if (state_log_dir.empty()) {
       cerr << "You have to provide save_directory to make the saving functions work properly." << std::endl;
@@ -898,6 +930,9 @@ int main(int argc, char** argv)
             {
                 first_lidar_time = Measures.lidar_beg_time;
                 p_imu->first_lidar_time = first_lidar_time;
+                if (locmode) {
+                    p_imu->set_init_pose(V3D(init_world_t_imu[0], init_world_t_imu[1], init_world_t_imu[2]), init_world_R_imu);
+                }
                 flg_first_scan = false;
                 continue;
             }
@@ -934,17 +969,22 @@ int main(int argc, char** argv)
             /*** initialize the map kdtree ***/
             if(ikdtree.Root_Node == nullptr)
             {
-                if(feats_down_size > 5)
-                {
-                    ikdtree.set_downsample_param(filter_size_map_min);
-                    feats_down_world->resize(feats_down_size);
-                    for(int i = 0; i < feats_down_size; i++)
+                if (!locmode) {
+                    if(feats_down_size > 5)
                     {
-                        pointBodyToWorld(&(feats_down_body->points[i]), &(feats_down_world->points[i]));
+                        ikdtree.set_downsample_param(filter_size_map_min);
+                        feats_down_world->resize(feats_down_size);
+                        for(int i = 0; i < feats_down_size; i++)
+                        {
+                            pointBodyToWorld(&(feats_down_body->points[i]), &(feats_down_world->points[i]));
+                        }
+                        ikdtree.Build(feats_down_world->points);
                     }
-                    ikdtree.Build(feats_down_world->points);
+                    continue;
+                } else {
+                    ikdtree.set_downsample_param(filter_size_map_min);
+                    load_pcd_map();
                 }
-                continue;
             }
             int featsFromMapNum = ikdtree.validnum();
             kdtree_size_st = ikdtree.size();
@@ -966,11 +1006,12 @@ int main(int argc, char** argv)
             <<" "<<state_point.bg.transpose()<<" "<<state_point.ba.transpose()<<" "<<state_point.grav<< endl;
 
             if(0) // If you need to see map point, change to "if(1)"
-            {
+            { // This can drastically slow down the program.
                 PointVector ().swap(ikdtree.PCL_Storage);
                 ikdtree.flatten(ikdtree.Root_Node, ikdtree.PCL_Storage, NOT_RECORD);
                 featsFromMap->clear();
                 featsFromMap->points = ikdtree.PCL_Storage;
+                publish_map(pubLaserCloudMap);
             }
 
             pointSearchInd_surf.resize(feats_down_size);
@@ -998,16 +1039,16 @@ int main(int argc, char** argv)
             publish_odometry(pubOdomAftMapped);
 
             /*** add the feature points to map kdtree ***/
-            t3 = omp_get_wtime();
-            map_incremental();
-            t5 = omp_get_wtime();
-            
+            if (!locmode) {
+                t3 = omp_get_wtime();
+                map_incremental();
+                t5 = omp_get_wtime();
+            }
             /******* Publish points *******/
             if (path_en)                         publish_path(pubPath);
             if (scan_pub_en || pcd_save_en)      publish_frame_world(pubLaserCloudFull);
             if (scan_pub_en && scan_body_pub_en) publish_frame_body(pubLaserCloudFull_body);
             // publish_effect_world(pubLaserCloudEffect);
-            // publish_map(pubLaserCloudMap);
 
             /*** Debug variables ***/
             if (runtime_pos_log)
