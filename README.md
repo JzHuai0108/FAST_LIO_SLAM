@@ -45,6 +45,17 @@ make -j $(nproc) check # (optional, runs unit tests)
 make -j $(nproc) install
 ```
 
+## Build
+```
+# build livox_ros_driver2
+cd cd src/blss_lidar_slam/livox_ros_driver2/
+./build.sh ROS1 $HOME/Documents/slam_devel  -DPYTHON_EXECUTABLE=/usr/bin/python3
+
+# build fast-lio2
+cd catkin_ws
+catkin build -DCMAKE_INSTALL_PREFIX=$HOME/Documents/slam_devel
+
+```
 
 ## How to use?
 - The below commands and the launch files are made for playing the [MulRan dataset](https://sites.google.com/view/mulran-pr/home), but applicable for livox lidars in the same way (you could easily make your own launch files).
