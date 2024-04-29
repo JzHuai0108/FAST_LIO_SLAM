@@ -14,14 +14,14 @@ find_package(catkin REQUIRED COMPONENTS
   rospy
   rosbag
   std_msgs
-  image_transport
-  cv_bridge
+#  image_transport
+#  cv_bridge
   tf
 )
 
 #find_package(Eigen3 REQUIRED)
 find_package(PCL REQUIRED)
-find_package(OpenCV REQUIRED)
+# find_package(OpenCV REQUIRED)
 find_package(Ceres REQUIRED)
 find_package(Boost REQUIRED COMPONENTS timer)
 find_package(OpenMP REQUIRED)
@@ -32,7 +32,7 @@ include_directories(
 	${catkin_INCLUDE_DIRS} 
 	${PCL_INCLUDE_DIRS}
   ${CERES_INCLUDE_DIRS}
-  ${OpenCV_INCLUDE_DIRS}
+  # ${OpenCV_INCLUDE_DIRS}
   ${GTSAM_INCLUDE_DIR}
 )
 
@@ -66,8 +66,8 @@ target_link_libraries(alaserPGO
   gtsam
 )
 
-add_executable(kittiHelper src/kittiHelper.cpp)
-target_link_libraries(kittiHelper ${catkin_LIBRARIES} ${PCL_LIBRARIES} ${OpenCV_LIBS})
+# add_executable(kittiHelper src/kittiHelper.cpp)
+# target_link_libraries(kittiHelper ${catkin_LIBRARIES} ${PCL_LIBRARIES} ${OpenCV_LIBS})
 
 
 
