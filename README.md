@@ -15,6 +15,18 @@ Integration of
     - Finally, an optimized map is made within the SC-PGO node. 
 
 ## Install ceres solver
+```
+cd /home/$USER/Documents/slam_src
+git clone --recursive https://github.com/ceres-solver/ceres-solver.git
+cd ceres-solver
+git checkout 2.1.0
+mkdir -p build && cd build
+cmake .. -DCMAKE_INSTALL_PREFIX=/home/$USER/Documents/slam_devel -DBUILD_SHARED_LIBS=ON \
+    -DCMAKE_BUILD_TYPE:STRING=Release -DBUILD_EXAMPLES:BOOL=OFF -DBUILD_TESTING:BOOL=OFF \
+    -DGLOG_INCLUDE_DIR_HINTS=/usr/include -DGLOG_LIBRARY_DIR_HINTS=/usr/lib
+
+make install
+```
 
 
 ## Install gtsam
@@ -48,7 +60,7 @@ make -j $(nproc) install
 ## Build
 ```
 # build livox_ros_driver2
-cd cd src/blss_lidar_slam/livox_ros_driver2/
+cd src/FAST_LIO_SLAM/livox_ros_driver2/
 ./build.sh ROS1 $HOME/Documents/slam_devel  -DPYTHON_EXECUTABLE=/usr/bin/python3
 
 # build fast-lio2
@@ -66,7 +78,10 @@ catkin build -DCMAKE_INSTALL_PREFIX=$HOME/Documents/slam_devel
     git clone https://github.com/JzHuai0108/FAST_LIO_SLAM.git
     git clone https://github.com/Livox-SDK/livox_ros_driver
     cd .. 
-    catkin build -DPYTHON_EXECUTABLE=/usr/bin/python3 -DPYTHON_INCLUDE_DIR=/usr/include/python3.8 -DGTSAM_DIR=/home/pi/Documents/slam_devel/lib/cmake/GTSAM -DCMAKE_BUILD_TYPE=Release
+    catkin build -DPYTHON_EXECUTABLE=/usr/bin/python3 -DPYTHON_INCLUDE_DIR=/usr/include/python3.8 \
+      -DCeres_DIR=/home/$USER/Documents/slam_devel/lib/cmake/Ceres \
+      -DGLOG_INCLUDE_DIR_HINTS=/usr/include -DGLOG_LIBRARY_DIR_HINTS=/usr/lib \
+      -DGTSAM_DIR=/home/pi/Documents/slam_devel/lib/cmake/GTSAM -DCMAKE_BUILD_TYPE=Release
 
     source devel/setup.bash
     roslaunch fast_lio mapping_ouster64_mulran.launch # setting for MulRan dataset 
